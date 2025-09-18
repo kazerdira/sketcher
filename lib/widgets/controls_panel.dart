@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../controllers/sketch_controller.dart';
+import '../models/stroke.dart';
 
 /// Controls panel for brush settings, color palette, and drawing options
 class ControlsPanel extends StatelessWidget {
@@ -29,6 +30,11 @@ class ControlsPanel extends StatelessWidget {
           children: [
             // Image opacity control (only shown when image is loaded)
             _buildImageOpacityControl(),
+
+            // Brush type selector
+            _buildBrushTypeSelector(),
+
+            const SizedBox(height: 8),
 
             // Color palette
             _buildColorPalette(),
@@ -110,8 +116,7 @@ class ControlsPanel extends StatelessWidget {
           children: c.palette
               .map(
                 (color) => Obx(
-                  () =>
-                      _buildColorButton(color, c.selectedColor.value == color),
+                  () => _buildColorButton(color, c.selectedColor == color),
                 ),
               )
               .toList(),
@@ -125,7 +130,7 @@ class ControlsPanel extends StatelessWidget {
     final SketchController c = Get.find();
 
     return InkWell(
-      onTap: () => c.selectedColor.value = color,
+      onTap: () => c.setBrushColor(color),
       borderRadius: BorderRadius.circular(20),
       child: Container(
         width: 36,
@@ -169,32 +174,119 @@ class ControlsPanel extends StatelessWidget {
         children: [
           Row(
             children: [
-              const Icon(Icons.brush, size: 18),
+              const Icon(Icons.line_weight, size: 18),
               const SizedBox(width: 8),
               const Text('Brush Size'),
               const Spacer(),
               Text(
-                c.brushSize.value.toStringAsFixed(1),
+                '${c.brushSize.toStringAsFixed(1)}px',
                 style: const TextStyle(fontWeight: FontWeight.w500),
               ),
             ],
           ),
           Row(
             children: [
-              const Icon(Icons.radio_button_unchecked, size: 12),
+              Icon(
+                Icons.radio_button_unchecked,
+                size: 8 + (c.minBrushSize * 2),
+              ),
               Expanded(
                 child: Slider(
-                  value: c.brushSize.value,
-                  min: 1,
-                  max: 20,
-                  divisions: 19,
-                  onChanged: (v) => c.brushSize.value = v,
+                  value: c.brushSize.clamp(c.minBrushSize, c.maxBrushSize),
+                  min: c.minBrushSize,
+                  max: c.maxBrushSize,
+                  divisions: ((c.maxBrushSize - c.minBrushSize) * 2).round(),
+                  onChanged: (v) => c.setBrushSize(v),
                 ),
               ),
-              const Icon(Icons.circle, size: 20),
+              Icon(Icons.circle, size: 8 + (c.maxBrushSize * 0.8)),
             ],
           ),
+          // Show brush type specific range
+          Text(
+            '${c.selectedBrushType.name}: ${c.minBrushSize.toStringAsFixed(1)} - ${c.maxBrushSize.toStringAsFixed(1)}px',
+            style: TextStyle(fontSize: 10, color: Colors.grey.shade600),
+          ),
         ],
+      ),
+    );
+  }
+
+  /// Build brush type selector
+  Widget _buildBrushTypeSelector() {
+    final SketchController c = Get.find();
+
+    return Obx(
+      () => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.brush, size: 18),
+              const SizedBox(width: 8),
+              const Text('Brush Type'),
+              const Spacer(),
+              Text(
+                c.selectedBrushType.name,
+                style: const TextStyle(fontWeight: FontWeight.w500),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          // Brush type buttons
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: BrushType.values.map((brushType) {
+                final isSelected = c.selectedBrushType == brushType;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: _buildBrushTypeButton(brushType, isSelected),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Build individual brush type button
+  Widget _buildBrushTypeButton(BrushType brushType, bool selected) {
+    final SketchController c = Get.find();
+
+    return GestureDetector(
+      onTap: () => c.selectBrushType(brushType),
+      child: Container(
+        width: 60,
+        height: 50,
+        decoration: BoxDecoration(
+          color: selected ? Colors.blue.shade50 : Colors.grey.shade100,
+          border: Border.all(
+            color: selected ? Colors.blue : Colors.grey.shade300,
+            width: selected ? 2 : 1,
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              brushType.icon,
+              size: 20,
+              color: selected ? Colors.blue : Colors.grey.shade600,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              brushType.name,
+              style: TextStyle(
+                fontSize: 10,
+                color: selected ? Colors.blue : Colors.grey.shade600,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -208,21 +300,28 @@ class ControlsPanel extends StatelessWidget {
         children: [
           const Icon(Icons.speed, size: 18),
           const SizedBox(width: 8),
-          const Expanded(
+          Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Pressure Simulation'),
+                const Text('Pressure Simulation'),
                 Text(
-                  'Vary line thickness based on drawing speed',
-                  style: TextStyle(fontSize: 12, color: Colors.grey),
+                  c.isPressureSupported
+                      ? 'Vary line thickness based on drawing speed'
+                      : 'Not supported by ${c.selectedBrushType.name}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: c.isPressureSupported ? Colors.grey : Colors.orange,
+                  ),
                 ),
               ],
             ),
           ),
           Switch(
-            value: c.pressureSimEnabled.value,
-            onChanged: (v) => c.pressureSimEnabled.value = v,
+            value: c.pressureSimEnabled.value && c.isPressureSupported,
+            onChanged: c.isPressureSupported
+                ? (v) => c.pressureSimEnabled.value = v
+                : null,
           ),
         ],
       ),

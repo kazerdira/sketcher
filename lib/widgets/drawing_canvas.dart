@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:get/get.dart';
 import '../controllers/sketch_controller.dart';
-import '../painters/sketch_painter.dart';
+import '../painters/professional_sketch_painter.dart';
 
 /// The main drawing canvas with zoom, pan, and drawing capabilities
 class DrawingCanvas extends StatelessWidget {
@@ -89,9 +89,8 @@ class DrawingCanvas extends StatelessWidget {
                         ..scale(c.scale.value),
                       child: GetBuilder<SketchController>(
                         builder: (_) => CustomPaint(
-                          painter: SketchPainter(
+                          painter: ProfessionalSketchPainter(
                             strokes: c.strokes,
-                            currentStroke: c.currentStroke,
                           ),
                           size: Size.infinite,
                         ),
