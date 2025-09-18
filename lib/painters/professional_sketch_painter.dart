@@ -1,416 +1,315 @@
+import 'package:flutter/material.dart';
 import 'dart:ui' as ui;
 import 'dart:math' as math;
-import 'package:flutter/material.dart';
-import '../models/stroke.dart';
+import '../models/drawing_tool.dart';
+import '../models/enhanced_stroke.dart';
 
 class ProfessionalSketchPainter extends CustomPainter {
-  final List<Stroke> strokes;
+  final List<EnhancedStroke> strokes;
+  final EnhancedStroke? currentStroke;
   final ui.Image? backgroundImage;
   final double imageOpacity;
   final bool showImage;
-  final Offset panOffset;
-  final double scale;
-  final ui.Image? paperTexture;
-  final ui.Image? brushTextures;
+  final Size canvasSize;
 
   ProfessionalSketchPainter({
     required this.strokes,
+    this.currentStroke,
     this.backgroundImage,
     this.imageOpacity = 0.5,
     this.showImage = true,
-    this.panOffset = Offset.zero,
-    this.scale = 1.0,
-    this.paperTexture,
-    this.brushTextures,
+    required this.canvasSize,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    canvas.save();
+    // Setup canvas
+    canvas.clipRect(Rect.fromLTWH(0, 0, size.width, size.height));
 
-    // Apply transformations
-    canvas.translate(panOffset.dx, panOffset.dy);
-    canvas.scale(scale);
-
-    // Draw paper texture background
-    _drawPaperTexture(canvas, size);
-
-    // Draw background image if present
+    // Draw background image if available
     if (showImage && backgroundImage != null) {
       _drawBackgroundImage(canvas, size);
     }
 
-    // Draw all strokes with proper blending
-    _drawStrokes(canvas, size);
+    // Draw all completed strokes
+    for (final stroke in strokes) {
+      _drawStroke(canvas, stroke, size);
+    }
 
-    canvas.restore();
-  }
-
-  void _drawPaperTexture(Canvas canvas, Size size) {
-    if (paperTexture == null) {
-      // Create a subtle paper texture effect
-      final paint = Paint()
-        ..color = const Color(0xFFFFFEF8)
-        ..style = PaintingStyle.fill;
-      canvas.drawRect(Rect.fromLTWH(0, 0, size.width, size.height), paint);
-
-      // Add subtle noise pattern
-      final noisePaint = Paint()
-        ..color = const Color(0xFFF8F8F8)
-        ..style = PaintingStyle.fill;
-
-      final random = math.Random(42); // Fixed seed for consistent texture
-      for (int i = 0; i < 1000; i++) {
-        final x = random.nextDouble() * size.width;
-        final y = random.nextDouble() * size.height;
-        final opacity = random.nextDouble() * 0.1;
-        noisePaint.color = Color.fromRGBO(240, 240, 240, opacity);
-        canvas.drawCircle(Offset(x, y), 0.5, noisePaint);
-      }
-    } else {
-      // Use actual paper texture
-      canvas.drawImageRect(
-        paperTexture!,
-        Rect.fromLTWH(
-          0,
-          0,
-          paperTexture!.width.toDouble(),
-          paperTexture!.height.toDouble(),
-        ),
-        Rect.fromLTWH(0, 0, size.width, size.height),
-        Paint(),
-      );
+    // Draw current stroke if available
+    if (currentStroke != null && currentStroke!.points.isNotEmpty) {
+      _drawStroke(canvas, currentStroke!, size);
     }
   }
 
   void _drawBackgroundImage(Canvas canvas, Size size) {
     if (backgroundImage == null) return;
 
-    final paint = Paint()..color = Color.fromRGBO(255, 255, 255, imageOpacity);
+    final paint = Paint()
+      ..filterQuality = FilterQuality.high
+      ..color = Colors.white.withOpacity(imageOpacity);
 
-    // Calculate aspect ratio and positioning
-    final imageAspect = backgroundImage!.width / backgroundImage!.height;
-    final canvasAspect = size.width / size.height;
-
-    Rect destRect;
-    if (imageAspect > canvasAspect) {
-      // Image is wider - fit to height
-      final scaledWidth = size.height * imageAspect;
-      final offsetX = (size.width - scaledWidth) / 2;
-      destRect = Rect.fromLTWH(offsetX, 0, scaledWidth, size.height);
-    } else {
-      // Image is taller - fit to width
-      final scaledHeight = size.width / imageAspect;
-      final offsetY = (size.height - scaledHeight) / 2;
-      destRect = Rect.fromLTWH(0, offsetY, size.width, scaledHeight);
-    }
+    final imageSize = Size(
+      backgroundImage!.width.toDouble(),
+      backgroundImage!.height.toDouble(),
+    );
+    final canvasRect = Rect.fromLTWH(0, 0, size.width, size.height);
+    final imageRect = _calculateImageRect(imageSize, canvasRect);
 
     canvas.drawImageRect(
       backgroundImage!,
-      Rect.fromLTWH(
-        0,
-        0,
-        backgroundImage!.width.toDouble(),
-        backgroundImage!.height.toDouble(),
-      ),
-      destRect,
+      Rect.fromLTWH(0, 0, imageSize.width, imageSize.height),
+      imageRect,
       paint,
     );
   }
 
-  void _drawStrokes(Canvas canvas, Size size) {
-    for (final stroke in strokes) {
-      _drawStroke(canvas, stroke);
+  Rect _calculateImageRect(Size imageSize, Rect canvasRect) {
+    final imageAspect = imageSize.width / imageSize.height;
+    final canvasAspect = canvasRect.width / canvasRect.height;
+
+    if (imageAspect > canvasAspect) {
+      // Image is wider than canvas
+      final height = canvasRect.width / imageAspect;
+      final y = (canvasRect.height - height) / 2;
+      return Rect.fromLTWH(0, y, canvasRect.width, height);
+    } else {
+      // Image is taller than canvas
+      final width = canvasRect.height * imageAspect;
+      final x = (canvasRect.width - width) / 2;
+      return Rect.fromLTWH(x, 0, width, canvasRect.height);
     }
   }
 
-  void _drawStroke(Canvas canvas, Stroke stroke) {
-    if (stroke.points.length < 2) return;
+  void _drawStroke(Canvas canvas, EnhancedStroke stroke, Size size) {
+    if (stroke.points.isEmpty) return;
 
-    switch (stroke.brushSettings.type) {
-      case BrushType.pencil:
+    switch (stroke.toolSettings.tool) {
+      case DrawingTool.pencil:
         _drawPencilStroke(canvas, stroke);
         break;
-      case BrushType.pen:
+      case DrawingTool.pen:
         _drawPenStroke(canvas, stroke);
         break;
-      case BrushType.marker:
+      case DrawingTool.marker:
         _drawMarkerStroke(canvas, stroke);
         break;
-      case BrushType.eraser:
+      case DrawingTool.eraser:
         _drawEraserStroke(canvas, stroke);
         break;
-      case BrushType.highlighter:
-        _drawHighlighterStroke(canvas, stroke);
-        break;
-      case BrushType.charcoal:
-        _drawCharcoalStroke(canvas, stroke);
-        break;
-      case BrushType.watercolor:
-        _drawWatercolorStroke(canvas, stroke);
+      case DrawingTool.brush:
+        _drawBrushStroke(canvas, stroke);
         break;
     }
   }
 
-  void _drawPencilStroke(Canvas canvas, Stroke stroke) {
-    final path = Path();
-    final points = stroke.getSmoothedPoints();
-
-    if (points.isEmpty) return;
-
-    path.moveTo(points.first.position.dx, points.first.position.dy);
-
-    // Create multiple layers for realistic pencil effect
-    final layers = 3;
-    final baseOpacity = stroke.brushSettings.opacity;
-
-    for (int layer = 0; layer < layers; layer++) {
-      final layerPath = Path();
-      layerPath.moveTo(points.first.position.dx, points.first.position.dy);
-
-      for (int i = 1; i < points.length; i++) {
-        final point = points[i];
-        final prevPoint = points[i - 1];
-
-        // Add slight randomness for texture
-        final random = math.Random(i + layer * 1000);
-        final offsetX = (random.nextDouble() - 0.5) * 0.5 * (layer + 1);
-        final offsetY = (random.nextDouble() - 0.5) * 0.5 * (layer + 1);
-
-        final adjustedPoint = Offset(
-          point.position.dx + offsetX,
-          point.position.dy + offsetY,
-        );
-
-        // Quadratic bezier curve for smoothness
-        final controlPoint = Offset(
-          (prevPoint.position.dx + adjustedPoint.dx) / 2,
-          (prevPoint.position.dy + adjustedPoint.dy) / 2,
-        );
-
-        layerPath.quadraticBezierTo(
-          prevPoint.position.dx,
-          prevPoint.position.dy,
-          controlPoint.dx,
-          controlPoint.dy,
-        );
-      }
-
-      // Calculate dynamic stroke width based on pressure and velocity
-      final paint = Paint()
-        ..color = stroke.brushSettings.color.withOpacity(
-          baseOpacity * (1.0 - layer * 0.2) * 0.6,
-        )
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round
-        ..strokeWidth = stroke.brushSettings.size * (1.0 - layer * 0.15);
-
-      // Add texture effect
-      if (stroke.brushSettings.textureIntensity > 0) {
-        paint.maskFilter = MaskFilter.blur(
-          BlurStyle.normal,
-          stroke.brushSettings.textureIntensity * 0.5,
-        );
-      }
-
-      canvas.drawPath(layerPath, paint);
-    }
-  }
-
-  void _drawPenStroke(Canvas canvas, Stroke stroke) {
-    final path = Path();
-    final points = stroke.points; // No smoothing for pen - keep it precise
-
-    if (points.isEmpty) return;
-
-    path.moveTo(points.first.position.dx, points.first.position.dy);
-
-    for (int i = 1; i < points.length; i++) {
-      path.lineTo(points[i].position.dx, points[i].position.dy);
-    }
+  void _drawPencilStroke(Canvas canvas, EnhancedStroke stroke) {
+    if (stroke.points.length < 2) return;
 
     final paint = Paint()
-      ..color = stroke.brushSettings.color.withOpacity(
-        stroke.brushSettings.opacity,
-      )
+      ..color = stroke.toolSettings.color
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
-      ..strokeWidth = stroke.brushSettings.size;
+      ..isAntiAlias = stroke.toolSettings.antiAlias;
 
-    canvas.drawPath(path, paint);
-  }
+    // Create textured pencil effect
+    for (int i = 0; i < stroke.points.length - 1; i++) {
+      final point = stroke.points[i];
+      final nextPoint = stroke.points[i + 1];
 
-  void _drawMarkerStroke(Canvas canvas, Stroke stroke) {
-    final points = stroke.getSmoothedPoints();
-    if (points.isEmpty) return;
+      // Calculate pressure-based size and opacity
+      final pressureFactor =
+          stroke.toolSettings.pressureSensitive ? point.pressure : 1.0;
+      final velocityFactor = math.max(0.3, 1.0 - (point.velocity / 1000.0));
 
-    // Markers have a distinctive flat, wide appearance
-    for (int i = 1; i < points.length; i++) {
-      final point = points[i];
-      final prevPoint = points[i - 1];
+      final dynamicSize =
+          stroke.toolSettings.size * pressureFactor * velocityFactor;
+      final dynamicOpacity =
+          (stroke.toolSettings.opacity * pressureFactor).clamp(0.1, 1.0);
 
-      // Calculate pressure-sensitive width
-      final pressure = stroke.brushSettings.pressureSensitive
-          ? point.pressure
-          : 1.0;
-      final width = stroke.brushSettings.size * pressure;
+      paint.strokeWidth = dynamicSize;
+      paint.color = stroke.toolSettings.color.withOpacity(dynamicOpacity);
 
-      // Create marker shape (flattened circle)
-      final paint = Paint()
-        ..color = stroke.brushSettings.color.withOpacity(
-          stroke.brushSettings.opacity * 0.7,
-        )
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.square
-        ..strokeWidth = width;
+      // Add texture by drawing multiple thin lines with slight offsets
+      final random = math.Random(i);
+      final numTextureLayers = (dynamicSize / 2).ceil().clamp(1, 4);
 
-      // Add streaky effect typical of markers
-      canvas.drawLine(prevPoint.position, point.position, paint);
+      for (int layer = 0; layer < numTextureLayers; layer++) {
+        final offset = (random.nextDouble() - 0.5) * dynamicSize * 0.1;
+        final layerOpacity =
+            (dynamicOpacity / numTextureLayers).clamp(0.05, 1.0);
 
-      // Add translucent overlay for blending effect
-      final overlayPaint = Paint()
-        ..color = stroke.brushSettings.color.withOpacity(
-          stroke.brushSettings.opacity * 0.3,
-        )
-        ..style = PaintingStyle.stroke
-        ..strokeCap = StrokeCap.round
-        ..strokeWidth = width * 1.2;
-
-      canvas.drawLine(prevPoint.position, point.position, overlayPaint);
-    }
-  }
-
-  void _drawEraserStroke(Canvas canvas, Stroke stroke) {
-    final points = stroke.getSmoothedPoints();
-    if (points.isEmpty) return;
-
-    // Eraser effect - we'll use blend mode to "subtract" from existing content
-    final paint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..strokeWidth = stroke.brushSettings.size
-      ..blendMode = ui.BlendMode.clear;
-
-    final path = Path();
-    path.moveTo(points.first.position.dx, points.first.position.dy);
-
-    for (int i = 1; i < points.length; i++) {
-      path.lineTo(points[i].position.dx, points[i].position.dy);
-    }
-
-    canvas.drawPath(path, paint);
-  }
-
-  void _drawHighlighterStroke(Canvas canvas, Stroke stroke) {
-    final points = stroke.getSmoothedPoints();
-    if (points.isEmpty) return;
-
-    final path = Path();
-    path.moveTo(points.first.position.dx, points.first.position.dy);
-
-    for (int i = 1; i < points.length; i++) {
-      path.lineTo(points[i].position.dx, points[i].position.dy);
-    }
-
-    // Highlighter has a distinctive flat, transparent appearance
-    final paint = Paint()
-      ..color = stroke.brushSettings.color.withOpacity(0.3)
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.square
-      ..strokeWidth = stroke.brushSettings.size * 2
-      ..blendMode = ui.BlendMode.multiply;
-
-    canvas.drawPath(path, paint);
-  }
-
-  void _drawCharcoalStroke(Canvas canvas, Stroke stroke) {
-    final points = stroke.getSmoothedPoints();
-    if (points.isEmpty) return;
-
-    // Charcoal has a very organic, textured appearance
-    final random = math.Random(42);
-
-    for (int i = 1; i < points.length; i++) {
-      final point = points[i];
-      final prevPoint = points[i - 1];
-
-      // Create multiple scattered strokes for texture
-      for (int j = 0; j < 5; j++) {
-        final offsetX =
-            (random.nextDouble() - 0.5) * stroke.brushSettings.size * 0.3;
-        final offsetY =
-            (random.nextDouble() - 0.5) * stroke.brushSettings.size * 0.3;
+        final layerPaint = Paint()
+          ..color = stroke.toolSettings.color.withOpacity(layerOpacity)
+          ..strokeWidth = dynamicSize / numTextureLayers
+          ..strokeCap = StrokeCap.round
+          ..style = PaintingStyle.stroke;
 
         final startOffset = Offset(
-          prevPoint.position.dx + offsetX,
-          prevPoint.position.dy + offsetY,
+          point.position.dx + offset,
+          point.position.dy + offset,
         );
         final endOffset = Offset(
-          point.position.dx + offsetX,
-          point.position.dy + offsetY,
+          nextPoint.position.dx + offset,
+          nextPoint.position.dy + offset,
         );
 
-        final paint = Paint()
-          ..color = stroke.brushSettings.color.withOpacity(
-            stroke.brushSettings.opacity * (0.3 + random.nextDouble() * 0.4),
-          )
-          ..style = PaintingStyle.stroke
-          ..strokeCap = StrokeCap.round
-          ..strokeWidth =
-              stroke.brushSettings.size * (0.1 + random.nextDouble() * 0.3);
-
-        canvas.drawLine(startOffset, endOffset, paint);
+        canvas.drawLine(startOffset, endOffset, layerPaint);
       }
     }
   }
 
-  void _drawWatercolorStroke(Canvas canvas, Stroke stroke) {
-    final points = stroke.getSmoothedPoints();
-    if (points.isEmpty) return;
+  void _drawPenStroke(Canvas canvas, EnhancedStroke stroke) {
+    if (stroke.points.length < 2) return;
 
-    // Watercolor effect with bleeding and transparency
     final path = Path();
-    path.moveTo(points.first.position.dx, points.first.position.dy);
+    path.moveTo(stroke.points[0].position.dx, stroke.points[0].position.dy);
 
-    for (int i = 1; i < points.length; i++) {
-      path.lineTo(points[i].position.dx, points[i].position.dy);
+    // Create smooth path using quadratic bezier curves
+    for (int i = 1; i < stroke.points.length - 1; i++) {
+      final current = stroke.points[i].position;
+      final next = stroke.points[i + 1].position;
+      final controlPoint = Offset(
+        (current.dx + next.dx) / 2,
+        (current.dy + next.dy) / 2,
+      );
+      path.quadraticBezierTo(
+        current.dx,
+        current.dy,
+        controlPoint.dx,
+        controlPoint.dy,
+      );
     }
 
-    // Main stroke
-    final mainPaint = Paint()
-      ..color = stroke.brushSettings.color.withOpacity(
-        stroke.brushSettings.opacity * 0.6,
+    if (stroke.points.length > 1) {
+      final lastPoint = stroke.points.last.position;
+      path.lineTo(lastPoint.dx, lastPoint.dy);
+    }
+
+    final paint = Paint()
+      ..color = stroke.toolSettings.color.withOpacity(
+        stroke.toolSettings.opacity,
       )
       ..style = PaintingStyle.stroke
+      ..strokeWidth = stroke.toolSettings.size
       ..strokeCap = StrokeCap.round
-      ..strokeWidth = stroke.brushSettings.size;
+      ..strokeJoin = StrokeJoin.round
+      ..isAntiAlias = stroke.toolSettings.antiAlias;
 
-    canvas.drawPath(path, mainPaint);
+    canvas.drawPath(path, paint);
+  }
 
-    // Add bleeding effect
-    final bleedPaint = Paint()
-      ..color = stroke.brushSettings.color.withOpacity(
-        stroke.brushSettings.opacity * 0.2,
-      )
+  void _drawMarkerStroke(Canvas canvas, EnhancedStroke stroke) {
+    if (stroke.points.isEmpty) return;
+
+    // Create marker effect with multiple layers
+    final baseOpacity = stroke.toolSettings.opacity * 0.6;
+
+    // Draw base layer (wider, more transparent)
+    _drawMarkerLayer(canvas, stroke, 1.5, baseOpacity * 0.4);
+
+    // Draw main layer
+    _drawMarkerLayer(canvas, stroke, 1.0, baseOpacity);
+
+    // Draw highlight layer (narrower, less transparent)
+    _drawMarkerLayer(canvas, stroke, 0.6, baseOpacity * 1.2);
+  }
+
+  void _drawMarkerLayer(
+    Canvas canvas,
+    EnhancedStroke stroke,
+    double sizeFactor,
+    double opacity,
+  ) {
+    for (int i = 0; i < stroke.points.length - 1; i++) {
+      final point = stroke.points[i];
+      final nextPoint = stroke.points[i + 1];
+
+      final pressureFactor =
+          stroke.toolSettings.pressureSensitive ? point.pressure : 1.0;
+      final dynamicSize =
+          stroke.toolSettings.size * sizeFactor * pressureFactor;
+
+      final paint = Paint()
+        ..color = stroke.toolSettings.color.withOpacity(opacity.clamp(0.0, 1.0))
+        ..strokeWidth = dynamicSize
+        ..strokeCap = StrokeCap.round
+        ..style = PaintingStyle.stroke
+        ..blendMode = ui.BlendMode.multiply;
+
+      canvas.drawLine(point.position, nextPoint.position, paint);
+    }
+  }
+
+  void _drawBrushStroke(Canvas canvas, EnhancedStroke stroke) {
+    if (stroke.points.length < 2) return;
+
+    // Create soft brush effect
+    for (int i = 0; i < stroke.points.length - 1; i++) {
+      final point = stroke.points[i];
+      final nextPoint = stroke.points[i + 1];
+
+      final pressureFactor =
+          stroke.toolSettings.pressureSensitive ? point.pressure : 1.0;
+      final dynamicSize = stroke.toolSettings.size * pressureFactor;
+      final dynamicOpacity =
+          stroke.toolSettings.opacity * stroke.toolSettings.flow;
+
+      // Create gradient brush effect
+      final center = Offset(
+        (point.position.dx + nextPoint.position.dx) / 2,
+        (point.position.dy + nextPoint.position.dy) / 2,
+      );
+
+      final gradient = RadialGradient(
+        colors: [
+          stroke.toolSettings.color.withOpacity(dynamicOpacity),
+          stroke.toolSettings.color.withOpacity(0.0),
+        ],
+        stops: const [0.0, 1.0],
+      );
+
+      final paint = Paint()
+        ..shader = gradient.createShader(
+          Rect.fromCircle(center: center, radius: dynamicSize / 2),
+        )
+        ..blendMode = ui.BlendMode.srcOver;
+
+      canvas.drawCircle(center, dynamicSize / 2, paint);
+    }
+  }
+
+  void _drawEraserStroke(Canvas canvas, EnhancedStroke stroke) {
+    if (stroke.points.length < 2) return;
+
+    final paint = Paint()
+      ..color = Colors.transparent
       ..style = PaintingStyle.stroke
       ..strokeCap = StrokeCap.round
-      ..strokeWidth = stroke.brushSettings.size * 2
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.0);
+      ..strokeJoin = StrokeJoin.round
+      ..blendMode = ui.BlendMode.clear
+      ..isAntiAlias = stroke.toolSettings.antiAlias;
 
-    canvas.drawPath(path, bleedPaint);
+    for (int i = 0; i < stroke.points.length - 1; i++) {
+      final point = stroke.points[i];
+      final nextPoint = stroke.points[i + 1];
+
+      final pressureFactor =
+          stroke.toolSettings.pressureSensitive ? point.pressure : 1.0;
+      final dynamicSize = stroke.toolSettings.size * pressureFactor;
+
+      paint.strokeWidth = dynamicSize;
+      canvas.drawLine(point.position, nextPoint.position, paint);
+    }
   }
 
   @override
-  bool shouldRepaint(ProfessionalSketchPainter oldDelegate) {
+  bool shouldRepaint(covariant ProfessionalSketchPainter oldDelegate) {
     return oldDelegate.strokes != strokes ||
+        oldDelegate.currentStroke != currentStroke ||
         oldDelegate.backgroundImage != backgroundImage ||
         oldDelegate.imageOpacity != imageOpacity ||
-        oldDelegate.showImage != showImage ||
-        oldDelegate.panOffset != panOffset ||
-        oldDelegate.scale != scale;
+        oldDelegate.showImage != showImage;
   }
 }
