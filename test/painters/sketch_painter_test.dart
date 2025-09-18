@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import '../../lib/painters/sketch_painter.dart';
-import '../../lib/models/stroke.dart';
-import '../../lib/models/drawing_tool.dart';
+import 'package:professional_sketcher/painters/sketch_painter.dart';
+import 'package:professional_sketcher/models/stroke.dart';
+import 'package:professional_sketcher/models/drawing_tool.dart';
 
 void main() {
   group('SketchPainter Tests', () {

@@ -1,9 +1,8 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
-import '../../lib/controllers/sketch_controller.dart';
-import '../../lib/models/drawing_tool.dart';
-import '../../lib/models/stroke.dart';
+import 'package:professional_sketcher/controllers/sketch_controller.dart';
+import 'package:professional_sketcher/models/drawing_tool.dart';
 
 void main() {
   group('SketchController Tests', () {

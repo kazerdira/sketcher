@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:get/get.dart';
-import '../../lib/widgets/drawing_canvas.dart';
-import '../../lib/controllers/sketch_controller.dart';
-import '../../lib/models/drawing_tool.dart';
+import 'package:professional_sketcher/widgets/drawing_canvas.dart';
+import 'package:professional_sketcher/controllers/sketch_controller.dart';
+import 'package:professional_sketcher/models/drawing_tool.dart';
 
 void main() {
   group('DrawingCanvas Widget Tests', () {

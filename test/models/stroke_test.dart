@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
-import '../../lib/models/stroke.dart';
-import '../../lib/models/drawing_tool.dart';
+import 'package:professional_sketcher/models/stroke.dart';
+import 'package:professional_sketcher/models/drawing_tool.dart';
 
 void main() {
   group('DrawingPoint Tests', () {
@@ -74,7 +74,7 @@ void main() {
       expect(config.blendMode, BlendMode.srcOver);
       expect(config.supportsPressure, isFalse);
       expect(config.supportsVelocity, isFalse);
-      expect(config.defaultColor, Colors.blue);
+      expect(config.defaultColor, Colors.black);
     });
 
     test('marker config should have correct properties', () {
@@ -92,7 +92,7 @@ void main() {
     test('eraser config should have correct properties', () {
       final config = ToolConfig.configs[DrawingTool.eraser]!;
 
-      expect(config.minWidth, 10.0);
+      expect(config.minWidth, 4.0);
       expect(config.maxWidth, 50.0);
       expect(config.opacity, 1.0);
       expect(config.blendMode, BlendMode.clear);

@@ -90,7 +90,7 @@ class ToolConfig {
       blendMode: BlendMode.srcOver,
       supportsPressure: false,
       supportsVelocity: false,
-      defaultColor: Colors.blue,
+      defaultColor: Colors.black,
     ),
     DrawingTool.marker: ToolConfig(
       minWidth: 8.0,
@@ -102,7 +102,7 @@ class ToolConfig {
       defaultColor: Colors.yellow,
     ),
     DrawingTool.eraser: ToolConfig(
-      minWidth: 10.0,
+      minWidth: 4.0,
       maxWidth: 50.0,
       opacity: 1.0,
       blendMode: BlendMode.clear,

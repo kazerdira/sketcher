@@ -1,6 +1,6 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
-import '../../lib/models/drawing_tool.dart';
+import 'package:professional_sketcher/models/drawing_tool.dart';
 
 void main() {
   group('DrawingTool Tests', () {

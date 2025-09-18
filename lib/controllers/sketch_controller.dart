@@ -24,6 +24,21 @@ class SketchController extends GetxController {
 
   // Velocity and pressure tracking
   double _lastVelocity = 0.0;
+  // Per-tool settings
+  final Map<DrawingTool, double> _toolSizes = {
+    DrawingTool.pencil: 3.0,
+    DrawingTool.pen: 2.0,
+    DrawingTool.marker: 12.0,
+    DrawingTool.eraser: 6.0,
+    DrawingTool.brush: 6.0,
+  };
+  final Map<DrawingTool, double> _toolOpacities = {
+    DrawingTool.pencil: ToolConfig.configs[DrawingTool.pencil]!.opacity,
+    DrawingTool.pen: ToolConfig.configs[DrawingTool.pen]!.opacity,
+    DrawingTool.marker: ToolConfig.configs[DrawingTool.marker]!.opacity,
+    DrawingTool.eraser: ToolConfig.configs[DrawingTool.eraser]!.opacity,
+    DrawingTool.brush: ToolConfig.configs[DrawingTool.brush]!.opacity,
+  };
   DateTime _lastPointTime = DateTime.now();
   Offset _lastOffset = Offset.zero;
 
@@ -40,7 +55,10 @@ class SketchController extends GetxController {
     final config = ToolConfig.configs[tool]!;
 
     // Update tool-specific settings
-    toolOpacity.value = config.opacity;
+    // Apply stored per-tool opacity/size
+    toolOpacity.value = _toolOpacities[tool] ?? config.opacity;
+    brushSize.value = (_toolSizes[tool] ?? brushSize.value)
+        .clamp(config.minWidth, config.maxWidth);
 
     // Set appropriate color for tool if it's the first time using it
     // Do not alter currentColor for eraser to avoid side-effects in tests/UI.
@@ -57,6 +75,7 @@ class SketchController extends GetxController {
   void setBrushSize(double size) {
     final config = ToolConfig.configs[currentTool.value]!;
     brushSize.value = size.clamp(config.minWidth, config.maxWidth);
+    _toolSizes[currentTool.value] = brushSize.value;
     update();
   }
 
@@ -69,6 +88,10 @@ class SketchController extends GetxController {
 
   void setOpacity(double opacity) {
     toolOpacity.value = opacity.clamp(0.0, 1.0);
+    _toolOpacities[currentTool.value] = toolOpacity.value;
+    if (_currentPoints.isNotEmpty) {
+      _updateCurrentStroke();
+    }
     update();
   }
 
@@ -237,7 +260,7 @@ class SketchController extends GetxController {
   }
 
   // Background image management
-  void setBackgroundImage(ImageProvider image) {
+  void setBackgroundImage(ImageProvider? image) {
     backgroundImage.value = image;
     update();
   }

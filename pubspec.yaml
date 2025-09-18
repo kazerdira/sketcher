@@ -25,9 +25,7 @@ dependencies:
   
   # Permissions
   permission_handler: ^11.0.1
-  
-  # Gallery Saver
-  gallery_saver: ^2.3.2
+
 
 dev_dependencies:
   flutter_test:
@@ -36,3 +34,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+

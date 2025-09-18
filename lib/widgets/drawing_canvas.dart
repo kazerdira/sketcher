@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
 import 'package:get/get.dart';
+import 'package:image_picker/image_picker.dart';
 import '../controllers/sketch_controller.dart';
 import '../painters/sketch_painter.dart';
 import '../models/drawing_tool.dart';
@@ -17,6 +20,8 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   // Removed InteractiveViewer, no need for TransformationController
 
   bool _isDrawing = false;
+  ui.Image? _backgroundImageData;
+  Offset? _cursorPos;
 
   @override
   Widget build(BuildContext context) {
@@ -37,30 +42,66 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                         _isDrawing = true;
                         HapticFeedback.lightImpact();
                         controller.startStroke(details.localPosition, 1.0);
+                        setState(() => _cursorPos = details.localPosition);
                       },
                       onPanUpdate: (details) {
                         if (!_isDrawing) return;
                         controller.addPoint(details.localPosition, 1.0);
+                        setState(() => _cursorPos = details.localPosition);
                       },
                       onPanEnd: (_) {
                         if (!_isDrawing) return;
                         _isDrawing = false;
                         controller.endStroke();
+                        setState(() => _cursorPos = null);
                       },
                       onPanCancel: () {
                         if (!_isDrawing) return;
                         _isDrawing = false;
                         controller.endStroke();
+                        setState(() => _cursorPos = null);
                       },
-                      child: CustomPaint(
-                        painter: SketchPainter(
-                          strokes: controller.strokes,
-                          currentStroke: controller.currentStroke,
-                          backgroundImage: controller.backgroundImage.value,
-                          imageOpacity: controller.imageOpacity.value,
-                          isImageVisible: controller.isImageVisible.value,
-                        ),
-                        child: const SizedBox.expand(),
+                      child: Stack(
+                        fit: StackFit.expand,
+                        children: [
+                          CustomPaint(
+                            painter: SketchPainter(
+                              strokes: controller.strokes,
+                              currentStroke: controller.currentStroke,
+                              backgroundImage: controller.backgroundImage.value,
+                              imageOpacity: controller.imageOpacity.value,
+                              isImageVisible: controller.isImageVisible.value,
+                              backgroundImageData: _backgroundImageData,
+                            ),
+                            child: const SizedBox.expand(),
+                          ),
+                          GetBuilder<SketchController>(builder: (_) {
+                            if (_cursorPos == null ||
+                                controller.currentTool.value !=
+                                    DrawingTool.eraser) {
+                              return const SizedBox.shrink();
+                            }
+                            final d = controller.brushSize.value;
+                            return Positioned(
+                              left: _cursorPos!.dx - d / 2,
+                              top: _cursorPos!.dy - d / 2,
+                              width: d,
+                              height: d,
+                              child: IgnorePointer(
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.redAccent.withOpacity(0.8),
+                                      width: 1.5,
+                                    ),
+                                    color: Colors.transparent,
+                                  ),
+                                ),
+                              ),
+                            );
+                          }),
+                        ],
                       ),
                     ),
                   );
@@ -303,6 +344,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                           style: TextStyle(fontWeight: FontWeight.bold)),
                       Expanded(
                         child: Slider(
+                          key: const Key('brush-size-slider'),
                           value: controller.brushSize.value,
                           min: 1.0,
                           max: 50.0,
@@ -325,10 +367,11 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                     children: [
                       const Icon(Icons.opacity, size: 16),
                       const SizedBox(width: 8),
-                      const Text('Opacity:',
+                      const Text('Stroke Opacity:',
                           style: TextStyle(fontWeight: FontWeight.bold)),
                       Expanded(
                         child: Slider(
+                          key: const Key('stroke-opacity-slider'),
                           value: controller.toolOpacity.value,
                           min: 0.0,
                           max: 1.0,
@@ -347,6 +390,36 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                       ),
                     ],
                   ),
+                  if (controller.backgroundImage.value != null) ...[
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.image, size: 16),
+                        const SizedBox(width: 8),
+                        const Text('Image Opacity:',
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        Expanded(
+                          child: Slider(
+                            key: const Key('image-opacity-slider'),
+                            value: controller.imageOpacity.value,
+                            min: 0.0,
+                            max: 1.0,
+                            divisions: 10,
+                            label:
+                                '${(controller.imageOpacity.value * 100).round()}%',
+                            onChanged: controller.setImageOpacity,
+                          ),
+                        ),
+                        SizedBox(
+                          width: 40,
+                          child: Text(
+                            '${(controller.imageOpacity.value * 100).round()}%',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             );
@@ -357,8 +430,6 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   }
 
   void _showImagePicker() {
-    // Implementation for image picker
-    // This would typically use image_picker package
     showModalBottomSheet(
       context: context,
       builder: (context) {
@@ -372,7 +443,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                 title: const Text('Choose from Gallery'),
                 onTap: () {
                   Navigator.pop(context);
-                  // Implement gallery picker
+                  _pickFromGallery();
                 },
               ),
               ListTile(
@@ -380,7 +451,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                 title: const Text('Take Photo'),
                 onTap: () {
                   Navigator.pop(context);
-                  // Implement camera picker
+                  _pickFromCamera();
                 },
               ),
               if (controller.backgroundImage.value != null)
@@ -389,8 +460,12 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                   title: const Text('Remove Background'),
                   onTap: () {
                     Navigator.pop(context);
-                    // Note: This would need to be implemented in controller
-                    // controller.removeBackgroundImage();
+                    setState(() {
+                      _backgroundImageData = null;
+                    });
+                    controller.setBackgroundImage(null);
+                    controller.isImageVisible.value = false;
+                    controller.update();
                   },
                 ),
             ],
@@ -398,5 +473,64 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
         );
       },
     );
+  }
+
+  Future<void> _pickFromGallery() async {
+    try {
+      final picker = ImagePicker();
+      final XFile? picked = await picker.pickImage(source: ImageSource.gallery);
+      if (picked == null) return;
+
+      final bytes = await picked.readAsBytes();
+      final img = await _decodeUiImage(bytes);
+
+      setState(() {
+        _backgroundImageData = img;
+      });
+      // Use MemoryImage to avoid platform-specific file issues
+      controller.setBackgroundImage(MemoryImage(bytes));
+      controller.isImageVisible.value = true;
+      controller.update();
+    } catch (e) {
+      Get.snackbar(
+        'Image Error',
+        'Failed to load image: $e',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  Future<void> _pickFromCamera() async {
+    try {
+      final picker = ImagePicker();
+      final XFile? picked = await picker.pickImage(source: ImageSource.camera);
+      if (picked == null) return;
+
+      final bytes = await picked.readAsBytes();
+      final img = await _decodeUiImage(bytes);
+
+      setState(() {
+        _backgroundImageData = img;
+      });
+      controller.setBackgroundImage(MemoryImage(bytes));
+      controller.isImageVisible.value = true;
+      controller.update();
+    } catch (e) {
+      Get.snackbar(
+        'Camera Error',
+        'Failed to capture image: $e',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
+  }
+
+  Future<ui.Image> _decodeUiImage(Uint8List bytes) async {
+    final codec = await ui.instantiateImageCodec(bytes);
+    final frame = await codec.getNextFrame();
+    return frame.image;
   }
 }
