@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'dart:ui' as ui;
-import 'dart:math' as math;
 import '../models/drawing_tool.dart';
 import '../models/enhanced_stroke.dart';
 
@@ -98,7 +97,27 @@ class ProfessionalSketchPainter extends CustomPainter {
         _drawEraserStroke(canvas, stroke);
         break;
       case DrawingTool.brush:
-        _drawBrushStroke(canvas, stroke);
+        // Simple brush with soft edges
+        for (int i = 0; i < stroke.points.length - 1; i++) {
+          final point = stroke.points[i];
+          final nextPoint = stroke.points[i + 1];
+
+          final pressureFactor =
+              stroke.toolSettings.pressureSensitive ? point.pressure : 1.0;
+          final dynamicSize = stroke.toolSettings.size * pressureFactor;
+          final dynamicOpacity =
+              stroke.toolSettings.opacity * stroke.toolSettings.flow;
+
+          final paint = Paint()
+            ..color = stroke.toolSettings.color
+                .withOpacity(dynamicOpacity.clamp(0.0, 1.0))
+            ..strokeWidth = dynamicSize.clamp(1.0, 50.0)
+            ..strokeCap = StrokeCap.round
+            ..style = PaintingStyle.stroke
+            ..isAntiAlias = stroke.toolSettings.antiAlias;
+
+          canvas.drawLine(point.position, nextPoint.position, paint);
+        }
         break;
     }
   }
@@ -106,14 +125,7 @@ class ProfessionalSketchPainter extends CustomPainter {
   void _drawPencilStroke(Canvas canvas, EnhancedStroke stroke) {
     if (stroke.points.length < 2) return;
 
-    final paint = Paint()
-      ..color = stroke.toolSettings.color
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..isAntiAlias = stroke.toolSettings.antiAlias;
-
-    // Create textured pencil effect
+    // Simple, visible pencil stroke first
     for (int i = 0; i < stroke.points.length - 1; i++) {
       final point = stroke.points[i];
       final nextPoint = stroke.points[i + 1];
@@ -121,41 +133,40 @@ class ProfessionalSketchPainter extends CustomPainter {
       // Calculate pressure-based size and opacity
       final pressureFactor =
           stroke.toolSettings.pressureSensitive ? point.pressure : 1.0;
-      final velocityFactor = math.max(0.3, 1.0 - (point.velocity / 1000.0));
 
-      final dynamicSize =
-          stroke.toolSettings.size * pressureFactor * velocityFactor;
-      final dynamicOpacity =
-          (stroke.toolSettings.opacity * pressureFactor).clamp(0.1, 1.0);
+      final dynamicSize = stroke.toolSettings.size * pressureFactor;
+      final dynamicOpacity = stroke.toolSettings.opacity * pressureFactor;
 
-      paint.strokeWidth = dynamicSize;
-      paint.color = stroke.toolSettings.color.withOpacity(dynamicOpacity);
+      // Draw main stroke line
+      final paint = Paint()
+        ..color = stroke.toolSettings.color
+            .withOpacity(dynamicOpacity.clamp(0.3, 1.0))
+        ..strokeWidth = dynamicSize.clamp(1.0, 50.0)
+        ..strokeCap = StrokeCap.round
+        ..style = PaintingStyle.stroke
+        ..isAntiAlias = stroke.toolSettings.antiAlias;
 
-      // Add texture by drawing multiple thin lines with slight offsets
-      final random = math.Random(i);
-      final numTextureLayers = (dynamicSize / 2).ceil().clamp(1, 4);
+      canvas.drawLine(point.position, nextPoint.position, paint);
 
-      for (int layer = 0; layer < numTextureLayers; layer++) {
-        final offset = (random.nextDouble() - 0.5) * dynamicSize * 0.1;
-        final layerOpacity =
-            (dynamicOpacity / numTextureLayers).clamp(0.05, 1.0);
-
-        final layerPaint = Paint()
-          ..color = stroke.toolSettings.color.withOpacity(layerOpacity)
-          ..strokeWidth = dynamicSize / numTextureLayers
+      // Add texture with additional thinner lines for pencil effect
+      if (dynamicSize > 2.0) {
+        final texturePaint = Paint()
+          ..color = stroke.toolSettings.color.withOpacity(dynamicOpacity * 0.3)
+          ..strokeWidth = (dynamicSize * 0.5).clamp(0.5, 10.0)
           ..strokeCap = StrokeCap.round
           ..style = PaintingStyle.stroke;
 
-        final startOffset = Offset(
-          point.position.dx + offset,
-          point.position.dy + offset,
+        // Offset lines for texture
+        canvas.drawLine(
+          point.position + const Offset(0.5, 0),
+          nextPoint.position + const Offset(0.5, 0),
+          texturePaint,
         );
-        final endOffset = Offset(
-          nextPoint.position.dx + offset,
-          nextPoint.position.dy + offset,
+        canvas.drawLine(
+          point.position + const Offset(-0.5, 0),
+          nextPoint.position + const Offset(-0.5, 0),
+          texturePaint,
         );
-
-        canvas.drawLine(startOffset, endOffset, layerPaint);
       }
     }
   }
@@ -203,49 +214,7 @@ class ProfessionalSketchPainter extends CustomPainter {
   void _drawMarkerStroke(Canvas canvas, EnhancedStroke stroke) {
     if (stroke.points.isEmpty) return;
 
-    // Create marker effect with multiple layers
-    final baseOpacity = stroke.toolSettings.opacity * 0.6;
-
-    // Draw base layer (wider, more transparent)
-    _drawMarkerLayer(canvas, stroke, 1.5, baseOpacity * 0.4);
-
-    // Draw main layer
-    _drawMarkerLayer(canvas, stroke, 1.0, baseOpacity);
-
-    // Draw highlight layer (narrower, less transparent)
-    _drawMarkerLayer(canvas, stroke, 0.6, baseOpacity * 1.2);
-  }
-
-  void _drawMarkerLayer(
-    Canvas canvas,
-    EnhancedStroke stroke,
-    double sizeFactor,
-    double opacity,
-  ) {
-    for (int i = 0; i < stroke.points.length - 1; i++) {
-      final point = stroke.points[i];
-      final nextPoint = stroke.points[i + 1];
-
-      final pressureFactor =
-          stroke.toolSettings.pressureSensitive ? point.pressure : 1.0;
-      final dynamicSize =
-          stroke.toolSettings.size * sizeFactor * pressureFactor;
-
-      final paint = Paint()
-        ..color = stroke.toolSettings.color.withOpacity(opacity.clamp(0.0, 1.0))
-        ..strokeWidth = dynamicSize
-        ..strokeCap = StrokeCap.round
-        ..style = PaintingStyle.stroke
-        ..blendMode = ui.BlendMode.multiply;
-
-      canvas.drawLine(point.position, nextPoint.position, paint);
-    }
-  }
-
-  void _drawBrushStroke(Canvas canvas, EnhancedStroke stroke) {
-    if (stroke.points.length < 2) return;
-
-    // Create soft brush effect
+    // Simple, visible marker with transparency
     for (int i = 0; i < stroke.points.length - 1; i++) {
       final point = stroke.points[i];
       final nextPoint = stroke.points[i + 1];
@@ -253,43 +222,36 @@ class ProfessionalSketchPainter extends CustomPainter {
       final pressureFactor =
           stroke.toolSettings.pressureSensitive ? point.pressure : 1.0;
       final dynamicSize = stroke.toolSettings.size * pressureFactor;
-      final dynamicOpacity =
-          stroke.toolSettings.opacity * stroke.toolSettings.flow;
 
-      // Create gradient brush effect
-      final center = Offset(
-        (point.position.dx + nextPoint.position.dx) / 2,
-        (point.position.dy + nextPoint.position.dy) / 2,
-      );
-
-      final gradient = RadialGradient(
-        colors: [
-          stroke.toolSettings.color.withOpacity(dynamicOpacity),
-          stroke.toolSettings.color.withOpacity(0.0),
-        ],
-        stops: const [0.0, 1.0],
-      );
-
+      // Main marker stroke with transparency
       final paint = Paint()
-        ..shader = gradient.createShader(
-          Rect.fromCircle(center: center, radius: dynamicSize / 2),
-        )
+        ..color = stroke.toolSettings.color
+            .withOpacity(0.6 * stroke.toolSettings.opacity)
+        ..strokeWidth = dynamicSize.clamp(2.0, 50.0)
+        ..strokeCap = StrokeCap.round
+        ..style = PaintingStyle.stroke
         ..blendMode = ui.BlendMode.srcOver;
 
-      canvas.drawCircle(center, dynamicSize / 2, paint);
+      canvas.drawLine(point.position, nextPoint.position, paint);
+
+      // Add a second layer for marker effect
+      final overlayPaint = Paint()
+        ..color = stroke.toolSettings.color
+            .withOpacity(0.3 * stroke.toolSettings.opacity)
+        ..strokeWidth = (dynamicSize * 1.2).clamp(3.0, 60.0)
+        ..strokeCap = StrokeCap.round
+        ..style = PaintingStyle.stroke
+        ..blendMode = ui.BlendMode.multiply;
+
+      canvas.drawLine(point.position, nextPoint.position, overlayPaint);
     }
   }
 
   void _drawEraserStroke(Canvas canvas, EnhancedStroke stroke) {
     if (stroke.points.length < 2) return;
 
-    final paint = Paint()
-      ..color = Colors.transparent
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..blendMode = ui.BlendMode.clear
-      ..isAntiAlias = stroke.toolSettings.antiAlias;
+    // Use saveLayer for proper erasing
+    canvas.saveLayer(null, Paint());
 
     for (int i = 0; i < stroke.points.length - 1; i++) {
       final point = stroke.points[i];
@@ -299,9 +261,18 @@ class ProfessionalSketchPainter extends CustomPainter {
           stroke.toolSettings.pressureSensitive ? point.pressure : 1.0;
       final dynamicSize = stroke.toolSettings.size * pressureFactor;
 
-      paint.strokeWidth = dynamicSize;
+      final paint = Paint()
+        ..color = Colors.transparent
+        ..strokeWidth = dynamicSize.clamp(5.0, 100.0)
+        ..strokeCap = StrokeCap.round
+        ..style = PaintingStyle.stroke
+        ..blendMode = ui.BlendMode.clear
+        ..isAntiAlias = stroke.toolSettings.antiAlias;
+
       canvas.drawLine(point.position, nextPoint.position, paint);
     }
+
+    canvas.restore();
   }
 
   @override

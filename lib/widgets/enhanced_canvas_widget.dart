@@ -65,7 +65,6 @@ class _EnhancedCanvasWidgetState extends State<EnhancedCanvasWidget>
   // Canvas state
   Size _canvasSize = Size.zero;
   bool _isDrawing = false;
-  int? _primaryPointerId;
 
   // Performance optimization
   bool _shouldOptimizePerformance = false;
@@ -151,14 +150,13 @@ class _EnhancedCanvasWidgetState extends State<EnhancedCanvasWidget>
       onInteractionStart: _onInteractionStart,
       onInteractionUpdate: _onInteractionUpdate,
       onInteractionEnd: _onInteractionEnd,
-      child: Container(
-        width: _canvasSize.width,
-        height: _canvasSize.height,
-        child: Listener(
-          onPointerDown: _onPointerDown,
-          onPointerMove: _onPointerMove,
-          onPointerUp: _onPointerUp,
-          onPointerCancel: _onPointerCancel,
+      child: GestureDetector(
+        onPanStart: _onPanStart,
+        onPanUpdate: _onPanUpdate,
+        onPanEnd: _onPanEnd,
+        child: Container(
+          width: _canvasSize.width,
+          height: _canvasSize.height,
           child: CustomPaint(
             painter: ProfessionalSketchPainter(
               strokes: widget.controller.strokes,
@@ -245,17 +243,13 @@ class _EnhancedCanvasWidgetState extends State<EnhancedCanvasWidget>
     _isDrawing = false;
   }
 
-  void _onPointerDown(PointerDownEvent event) {
-    // Handle drawing start
-    _activePointers[event.pointer] = event.localPosition;
-
-    if (_primaryPointerId == null && _shouldStartDrawing(event)) {
-      _primaryPointerId = event.pointer;
+  void _onPanStart(DragStartDetails details) {
+    if (_activePointers.isEmpty) {
       _isDrawing = true;
 
-      final localPosition = _getTransformedPosition(event.localPosition);
-      final pressure = _getPressure(event);
-      final tilt = _getTilt(event);
+      final localPosition = details.localPosition;
+      final pressure = 1.0; // Default pressure for touch/mouse
+      final tilt = 0.0; // Default tilt
 
       widget.controller.startStroke(
         localPosition,
@@ -265,18 +259,14 @@ class _EnhancedCanvasWidgetState extends State<EnhancedCanvasWidget>
 
       // Provide haptic feedback for drawing start
       HapticFeedback.lightImpact();
-
-      setState(() {});
     }
   }
 
-  void _onPointerMove(PointerMoveEvent event) {
-    _activePointers[event.pointer] = event.localPosition;
-
-    if (_isDrawing && event.pointer == _primaryPointerId) {
-      final localPosition = _getTransformedPosition(event.localPosition);
-      final pressure = _getPressure(event);
-      final tilt = _getTilt(event);
+  void _onPanUpdate(DragUpdateDetails details) {
+    if (_isDrawing) {
+      final localPosition = details.localPosition;
+      final pressure = 1.0; // Default pressure for touch/mouse
+      final tilt = 0.0; // Default tilt
 
       widget.controller.addPoint(localPosition, pressure: pressure, tilt: tilt);
 
@@ -284,68 +274,14 @@ class _EnhancedCanvasWidgetState extends State<EnhancedCanvasWidget>
     }
   }
 
-  void _onPointerUp(PointerUpEvent event) {
-    _activePointers.remove(event.pointer);
-
-    if (_isDrawing && event.pointer == _primaryPointerId) {
+  void _onPanEnd(DragEndDetails details) {
+    if (_isDrawing) {
       widget.controller.endStroke();
-      _primaryPointerId = null;
       _isDrawing = false;
 
       // Provide haptic feedback for drawing end
       HapticFeedback.selectionClick();
-
-      setState(() {});
     }
-  }
-
-  void _onPointerCancel(PointerCancelEvent event) {
-    _activePointers.remove(event.pointer);
-
-    if (_isDrawing && event.pointer == _primaryPointerId) {
-      widget.controller.endStroke();
-      _primaryPointerId = null;
-      _isDrawing = false;
-      setState(() {});
-    }
-  }
-
-  bool _shouldStartDrawing(PointerDownEvent event) {
-    // Don't start drawing if:
-    // - Multiple pointers are active (likely zooming/panning)
-    // - The tool is eraser and we're over empty space (optional optimization)
-    return _activePointers.length == 1;
-  }
-
-  Offset _getTransformedPosition(Offset screenPosition) {
-    // Transform screen coordinates to canvas coordinates
-    final matrix = _transformationController.value.clone();
-    matrix.invert();
-
-    return MatrixUtils.transformPoint(matrix, screenPosition);
-  }
-
-  double _getPressure(PointerEvent event) {
-    // Get pressure from stylus or default to 1.0
-    double p = 1.0;
-    if (event is PointerDownEvent) {
-      p = event.pressure;
-    } else if (event is PointerMoveEvent) {
-      p = event.pressure;
-    }
-    // Many mice report 0.0 pressure; treat that as full pressure for drawing
-    if (p == 0.0 || p.isNaN) p = 1.0;
-    return p.clamp(0.0, 1.0);
-  }
-
-  double _getTilt(PointerEvent event) {
-    // Get tilt angle from stylus
-    if (event is PointerDownEvent) {
-      return event.tilt;
-    } else if (event is PointerMoveEvent) {
-      return event.tilt;
-    }
-    return 0.0;
   }
 
   void _checkPerformanceOptimization() {

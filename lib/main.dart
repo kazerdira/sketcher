@@ -101,32 +101,52 @@ class _MainSketchPageState extends State<MainSketchPage> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 8),
           child: Center(
-            child: Text(
-              _getToolName(_controller.currentToolSettings.tool),
-              style: Theme.of(context).textTheme.titleSmall,
+            child: ListenableBuilder(
+              listenable: _controller,
+              builder: (context, child) {
+                return Text(
+                  _getToolName(_controller.currentToolSettings.tool),
+                  style: Theme.of(context).textTheme.titleSmall,
+                );
+              },
             ),
           ),
         ),
 
         // Undo
-        IconButton(
-          onPressed: _controller.canUndo ? _controller.undo : null,
-          icon: const Icon(Icons.undo),
-          tooltip: 'Undo',
+        ListenableBuilder(
+          listenable: _controller,
+          builder: (context, child) {
+            return IconButton(
+              onPressed: _controller.canUndo ? _controller.undo : null,
+              icon: const Icon(Icons.undo),
+              tooltip: 'Undo',
+            );
+          },
         ),
 
         // Redo
-        IconButton(
-          onPressed: _controller.canRedo ? _controller.redo : null,
-          icon: const Icon(Icons.redo),
-          tooltip: 'Redo',
+        ListenableBuilder(
+          listenable: _controller,
+          builder: (context, child) {
+            return IconButton(
+              onPressed: _controller.canRedo ? _controller.redo : null,
+              icon: const Icon(Icons.redo),
+              tooltip: 'Redo',
+            );
+          },
         ),
 
         // Clear
-        IconButton(
-          onPressed: _controller.hasStrokes ? _showClearDialog : null,
-          icon: const Icon(Icons.clear),
-          tooltip: 'Clear all',
+        ListenableBuilder(
+          listenable: _controller,
+          builder: (context, child) {
+            return IconButton(
+              onPressed: _controller.hasStrokes ? _showClearDialog : null,
+              icon: const Icon(Icons.clear),
+              tooltip: 'Clear all',
+            );
+          },
         ),
 
         // Settings
