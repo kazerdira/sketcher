@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import '../controllers/sketch_controller.dart';
 import '../painters/sketch_painter.dart';
 import '../models/drawing_tool.dart';
+import '../models/stroke.dart';
 
 class DrawingCanvas extends StatefulWidget {
   const DrawingCanvas({Key? key}) : super(key: key);
@@ -36,6 +37,8 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
               color: Colors.white,
               child: GetBuilder<SketchController>(
                 builder: (controller) {
+                  print(
+                      '🏗️ GETBUILDER: Rebuilding canvas with ${controller.strokes.length} strokes');
                   return SizedBox.expand(
                     child: GestureDetector(
                       behavior: HitTestBehavior.opaque,
@@ -70,7 +73,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                             key: _repaintKey,
                             child: CustomPaint(
                               painter: SketchPainter(
-                                strokes: controller.strokes,
+                                strokes: List<Stroke>.from(controller.strokes),
                                 currentStroke: controller.currentStroke,
                                 backgroundImage:
                                     controller.backgroundImage.value,
@@ -317,7 +320,11 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
           children: [
             IconButton(
               key: const Key('undo-button'),
-              onPressed: controller.undo,
+              onPressed: () {
+                print('🔘 BUTTON: Undo button pressed');
+                controller.undo();
+                print('🔘 BUTTON: Undo call completed');
+              },
               icon: const Icon(Icons.undo),
               tooltip: 'Undo',
             ),

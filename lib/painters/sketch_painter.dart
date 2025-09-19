@@ -23,6 +23,9 @@ class SketchPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    print(
+        '🎨 PAINT: Starting paint with ${strokes.length} strokes, currentStroke: ${currentStroke != null}');
+
     // Draw background image if available
     if (isImageVisible && backgroundImageData != null) {
       _drawBackgroundImage(canvas, size);
@@ -42,6 +45,7 @@ class SketchPainter extends CustomPainter {
     }
 
     canvas.restore();
+    print('🎨 PAINT: Finished painting');
   }
 
   void _drawBackgroundImage(Canvas canvas, Size size) {
@@ -431,21 +435,55 @@ class SketchPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant CustomPainter oldDelegate) {
-    if (oldDelegate is! SketchPainter) return true;
+    if (oldDelegate is! SketchPainter) {
+      print('🎨 REPAINT: Different painter type - repaint TRUE');
+      return true;
+    }
 
     final old = oldDelegate;
 
-    // Repaint when stroke contents change (even if list identity is the same)
-    if (old.strokes.length != strokes.length) return true;
-    for (int i = 0; i < strokes.length; i++) {
-      if (!identical(old.strokes[i], strokes[i])) return true;
+    // Repaint when stroke count changes (especially for undo)
+    if (old.strokes.length != strokes.length) {
+      print(
+          '🎨 REPAINT: Stroke count changed ${old.strokes.length} -> ${strokes.length} - repaint TRUE');
+      return true;
     }
 
-    if (!identical(old.currentStroke, currentStroke)) return true;
-    if (old.backgroundImage != backgroundImage) return true;
-    if (old.imageOpacity != imageOpacity) return true;
-    if (old.isImageVisible != isImageVisible) return true;
+    // Check if strokes list reference changed (after refresh)
+    if (!identical(old.strokes, strokes)) {
+      print('🎨 REPAINT: Strokes list reference changed - repaint TRUE');
+      return true;
+    }
 
+    // Repaint when stroke contents change (even if list identity is the same)
+    for (int i = 0; i < strokes.length; i++) {
+      if (!identical(old.strokes[i], strokes[i])) {
+        print('🎨 REPAINT: Stroke $i changed - repaint TRUE');
+        return true;
+      }
+    }
+
+    // Repaint when current stroke changes (for live drawing)
+    if (!identical(old.currentStroke, currentStroke)) {
+      print('🎨 REPAINT: Current stroke changed - repaint TRUE');
+      return true;
+    }
+
+    // Repaint when background properties change
+    if (old.backgroundImage != backgroundImage) {
+      print('🎨 REPAINT: Background image changed - repaint TRUE');
+      return true;
+    }
+    if (old.imageOpacity != imageOpacity) {
+      print('🎨 REPAINT: Image opacity changed - repaint TRUE');
+      return true;
+    }
+    if (old.isImageVisible != isImageVisible) {
+      print('🎨 REPAINT: Image visibility changed - repaint TRUE');
+      return true;
+    }
+
+    print('🎨 REPAINT: No changes detected - repaint FALSE');
     return false;
   }
 }

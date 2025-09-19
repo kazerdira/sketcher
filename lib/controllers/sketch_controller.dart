@@ -244,12 +244,22 @@ class SketchController extends GetxController {
 
   // Undo/Redo functionality
   void undo() {
+    print('🔄 UNDO: Called - strokes.length = ${strokes.length}');
     if (strokes.isNotEmpty) {
+      final removedStroke = strokes.last;
+      print(
+          '🗑️ UNDO: Removing stroke with ${removedStroke.points.length} points');
       strokes.removeLast();
       _currentStroke = null;
       _currentPoints = [];
       _lastVelocity = 0.0;
+      print('✅ UNDO: After removal - strokes.length = ${strokes.length}');
+      strokes.refresh(); // Force GetX observable update
+      print('🔄 UNDO: Called strokes.refresh()');
       update();
+      print('🔄 UNDO: Called update() - should trigger UI rebuild');
+    } else {
+      print('❌ UNDO: No strokes to remove');
     }
   }
 
