@@ -15,6 +15,29 @@ void main() {
       Get.put(controller);
     });
 
+    testWidgets('undo button key exists and triggers undo', (tester) async {
+      Get.testMode = true;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DrawingCanvas(),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final controller = Get.find<SketchController>();
+      controller.startStroke(const Offset(10, 10), 1.0);
+      controller.endStroke();
+      expect(controller.strokes, isNotEmpty);
+
+      final undoBtn = find.byKey(const Key('undo-button'));
+      expect(undoBtn, findsOneWidget);
+      await tester.tap(undoBtn);
+      await tester.pump();
+      expect(controller.strokes, isEmpty);
+    });
+
     tearDown(() {
       Get.reset();
     });
@@ -277,6 +300,7 @@ void main() {
 
       // Look for clear icon or button
       expect(find.byIcon(Icons.clear), findsOneWidget);
+      expect(find.byKey(const Key('clear-button')), findsOneWidget);
     });
 
     testWidgets('should handle clear button tap', (WidgetTester tester) async {
@@ -320,6 +344,37 @@ void main() {
 
       // Look for image/photo icon
       expect(find.byIcon(Icons.image), findsOneWidget);
+    });
+
+    testWidgets('remove background X button works',
+        (WidgetTester tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: DrawingCanvas(),
+          ),
+        ),
+      );
+
+      await tester.pumpAndSettle();
+
+      // Simulate setting a background image in controller state
+      final controller = Get.find<SketchController>();
+      controller.setBackgroundImage(const AssetImage('test/assets/fake.png'));
+      controller.isImageVisible.value = true;
+      controller.update();
+      await tester.pumpAndSettle();
+
+      // The X/remove button should appear
+      final removeBtn = find.byKey(const Key('remove-background-button'));
+      expect(removeBtn, findsOneWidget);
+
+      // Tap and verify state cleared
+      await tester.tap(removeBtn);
+      await tester.pumpAndSettle();
+
+      expect(controller.backgroundImage.value, isNull);
+      expect(controller.isImageVisible.value, isFalse);
     });
 
     testWidgets('should handle different screen orientations',

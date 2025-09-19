@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:flutter/services.dart';
+import 'package:flutter/rendering.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import '../controllers/sketch_controller.dart';
@@ -22,6 +23,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   bool _isDrawing = false;
   ui.Image? _backgroundImageData;
   Offset? _cursorPos;
+  final GlobalKey _repaintKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
@@ -64,16 +66,20 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                       child: Stack(
                         fit: StackFit.expand,
                         children: [
-                          CustomPaint(
-                            painter: SketchPainter(
-                              strokes: controller.strokes,
-                              currentStroke: controller.currentStroke,
-                              backgroundImage: controller.backgroundImage.value,
-                              imageOpacity: controller.imageOpacity.value,
-                              isImageVisible: controller.isImageVisible.value,
-                              backgroundImageData: _backgroundImageData,
+                          RepaintBoundary(
+                            key: _repaintKey,
+                            child: CustomPaint(
+                              painter: SketchPainter(
+                                strokes: controller.strokes,
+                                currentStroke: controller.currentStroke,
+                                backgroundImage:
+                                    controller.backgroundImage.value,
+                                imageOpacity: controller.imageOpacity.value,
+                                isImageVisible: controller.isImageVisible.value,
+                                backgroundImageData: _backgroundImageData,
+                              ),
+                              child: const SizedBox.expand(),
                             ),
-                            child: const SizedBox.expand(),
                           ),
                           GetBuilder<SketchController>(builder: (_) {
                             if (_cursorPos == null ||
@@ -88,16 +94,27 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                               width: d,
                               height: d,
                               child: IgnorePointer(
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(
-                                      color: Colors.redAccent.withOpacity(0.8),
-                                      width: 1.5,
+                                child: Stack(children: [
+                                  Container(
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.black.withOpacity(0.7),
+                                        width: 1,
+                                      ),
                                     ),
-                                    color: Colors.transparent,
                                   ),
-                                ),
+                                  Container(
+                                    margin: const EdgeInsets.all(1.5),
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: Colors.white.withOpacity(0.9),
+                                        width: 1,
+                                      ),
+                                    ),
+                                  ),
+                                ]),
                               ),
                             );
                           }),
@@ -130,75 +147,73 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   // Pointer handlers migrated to GestureDetector callbacks
 
   Widget _buildToolbar() {
-    return Container(
-      height: 80,
-      decoration: BoxDecoration(
-        color: Colors.grey[100],
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: GetBuilder<SketchController>(
-        builder: (controller) {
-          return Row(
-            children: [
-              const SizedBox(width: 16),
-              Expanded(
-                child: SingleChildScrollView(
-                  scrollDirection: Axis.horizontal,
-                  child: Row(
-                    children: [
-                      _buildToolButton(
-                        icon: Icons.edit,
-                        isSelected:
-                            controller.currentTool.value == DrawingTool.pencil,
-                        onTap: () => controller.setTool(DrawingTool.pencil),
-                        tooltip: 'Pencil',
+    return Material(
+      elevation: 2,
+      color: Colors.white,
+      child: SafeArea(
+        bottom: false,
+        child: SizedBox(
+          height: 72,
+          child: GetBuilder<SketchController>(
+            builder: (controller) {
+              return Row(
+                children: [
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Row(
+                        children: [
+                          _buildToolButton(
+                            icon: Icons.edit,
+                            isSelected: controller.currentTool.value ==
+                                DrawingTool.pencil,
+                            onTap: () => controller.setTool(DrawingTool.pencil),
+                            tooltip: 'Pencil',
+                          ),
+                          _buildToolButton(
+                            icon: Icons.create,
+                            isSelected:
+                                controller.currentTool.value == DrawingTool.pen,
+                            onTap: () => controller.setTool(DrawingTool.pen),
+                            tooltip: 'Pen',
+                          ),
+                          _buildToolButton(
+                            icon: Icons.brush,
+                            isSelected: controller.currentTool.value ==
+                                DrawingTool.marker,
+                            onTap: () => controller.setTool(DrawingTool.marker),
+                            tooltip: 'Marker',
+                          ),
+                          _buildToolButton(
+                            icon: Icons.cleaning_services,
+                            isSelected: controller.currentTool.value ==
+                                DrawingTool.eraser,
+                            onTap: () => controller.setTool(DrawingTool.eraser),
+                            tooltip: 'Eraser',
+                          ),
+                          _buildToolButton(
+                            icon: Icons.brush_outlined,
+                            isSelected: controller.currentTool.value ==
+                                DrawingTool.brush,
+                            onTap: () => controller.setTool(DrawingTool.brush),
+                            tooltip: 'Brush',
+                          ),
+                          const SizedBox(width: 16),
+                          _buildColorPalette(),
+                          const SizedBox(width: 16),
+                        ],
                       ),
-                      _buildToolButton(
-                        icon: Icons.create,
-                        isSelected:
-                            controller.currentTool.value == DrawingTool.pen,
-                        onTap: () => controller.setTool(DrawingTool.pen),
-                        tooltip: 'Pen',
-                      ),
-                      _buildToolButton(
-                        icon: Icons.brush,
-                        isSelected:
-                            controller.currentTool.value == DrawingTool.marker,
-                        onTap: () => controller.setTool(DrawingTool.marker),
-                        tooltip: 'Marker',
-                      ),
-                      _buildToolButton(
-                        icon: Icons.cleaning_services,
-                        isSelected:
-                            controller.currentTool.value == DrawingTool.eraser,
-                        onTap: () => controller.setTool(DrawingTool.eraser),
-                        tooltip: 'Eraser',
-                      ),
-                      _buildToolButton(
-                        icon: Icons.brush_outlined,
-                        isSelected:
-                            controller.currentTool.value == DrawingTool.brush,
-                        onTap: () => controller.setTool(DrawingTool.brush),
-                        tooltip: 'Brush',
-                      ),
-                      const SizedBox(width: 16),
-                      _buildColorPalette(),
-                      const SizedBox(width: 16),
-                    ],
+                    ),
                   ),
-                ),
-              ),
-              _buildActionButtons(),
-              const SizedBox(width: 16),
-            ],
-          );
-        },
+                  _buildActionButtons(),
+                  const SizedBox(width: 8),
+                ],
+              );
+            },
+          ),
+        ),
       ),
     );
   }
@@ -220,16 +235,33 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
             margin: const EdgeInsets.only(right: 8),
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: isSelected ? Colors.blue : Colors.transparent,
-              borderRadius: BorderRadius.circular(8),
+              color: isSelected ? const Color(0xFF007AFF) : Colors.white,
+              borderRadius: BorderRadius.circular(12),
               border: Border.all(
-                color: isSelected ? Colors.blue : Colors.grey.withOpacity(0.3),
+                color: isSelected
+                    ? const Color(0xFF007AFF)
+                    : Colors.grey.withOpacity(0.2),
               ),
+              boxShadow: isSelected
+                  ? [
+                      BoxShadow(
+                        color: const Color(0xFF007AFF).withOpacity(0.25),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      )
+                    ]
+                  : [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.05),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      )
+                    ],
             ),
             child: Icon(
               icon,
-              color: isSelected ? Colors.white : Colors.grey[700],
-              size: 24,
+              color: isSelected ? Colors.white : Colors.black87,
+              size: 22,
             ),
           ),
         ),
@@ -284,11 +316,13 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
         return Row(
           children: [
             IconButton(
+              key: const Key('undo-button'),
               onPressed: controller.undo,
               icon: const Icon(Icons.undo),
               tooltip: 'Undo',
             ),
             IconButton(
+              key: const Key('clear-button'),
               onPressed: controller.clear,
               icon: const Icon(Icons.clear),
               tooltip: 'Clear All',
@@ -297,6 +331,11 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
               onPressed: () => _showImagePicker(),
               icon: const Icon(Icons.image),
               tooltip: 'Background Image',
+            ),
+            IconButton(
+              onPressed: _saveSketch,
+              icon: const Icon(Icons.save_alt),
+              tooltip: 'Save Sketch',
             ),
             if (controller.backgroundImage.value != null)
               IconButton(
@@ -307,6 +346,20 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                       : Icons.visibility_off,
                 ),
                 tooltip: 'Toggle Image Visibility',
+              ),
+            if (controller.backgroundImage.value != null)
+              IconButton(
+                key: const Key('remove-background-button'),
+                onPressed: () {
+                  setState(() {
+                    _backgroundImageData = null;
+                  });
+                  controller.setBackgroundImage(null);
+                  controller.isImageVisible.value = false;
+                  controller.update();
+                },
+                icon: const Icon(Icons.close),
+                tooltip: 'Remove Background',
               ),
           ],
         );
@@ -532,5 +585,32 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     final codec = await ui.instantiateImageCodec(bytes);
     final frame = await codec.getNextFrame();
     return frame.image;
+  }
+
+  Future<void> _saveSketch() async {
+    try {
+      final boundary = _repaintKey.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      if (boundary == null) return;
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (byteData == null) return;
+      final pngBytes = byteData.buffer.asUint8List();
+
+      // TODO: Persist via path_provider and show a snackbar with the path
+      Get.snackbar(
+        'Saved',
+        'Sketch captured to PNG (${(pngBytes.lengthInBytes / 1024).toStringAsFixed(1)} KB)',
+        snackPosition: SnackPosition.BOTTOM,
+      );
+    } catch (e) {
+      Get.snackbar(
+        'Save Error',
+        'Failed to save sketch: $e',
+        snackPosition: SnackPosition.BOTTOM,
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+      );
+    }
   }
 }

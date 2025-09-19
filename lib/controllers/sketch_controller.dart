@@ -39,6 +39,13 @@ class SketchController extends GetxController {
     DrawingTool.eraser: ToolConfig.configs[DrawingTool.eraser]!.opacity,
     DrawingTool.brush: ToolConfig.configs[DrawingTool.brush]!.opacity,
   };
+  final Map<DrawingTool, Color> _toolColors = {
+    DrawingTool.pencil: Colors.black,
+    DrawingTool.pen: Colors.black,
+    DrawingTool.marker: Colors.black,
+    DrawingTool.eraser: Colors.transparent,
+    DrawingTool.brush: Colors.black,
+  };
   DateTime _lastPointTime = DateTime.now();
   Offset _lastOffset = Offset.zero;
 
@@ -60,13 +67,9 @@ class SketchController extends GetxController {
     brushSize.value = (_toolSizes[tool] ?? brushSize.value)
         .clamp(config.minWidth, config.maxWidth);
 
-    // Set appropriate color for tool if it's the first time using it
-    // Do not alter currentColor for eraser to avoid side-effects in tests/UI.
+    // Apply per-tool color memory (default black). Do not change for eraser.
     if (tool != DrawingTool.eraser) {
-      if (currentColor.value == Colors.black &&
-          config.defaultColor != Colors.black) {
-        currentColor.value = config.defaultColor;
-      }
+      currentColor.value = _toolColors[tool] ?? currentColor.value;
     }
 
     update();
@@ -82,6 +85,7 @@ class SketchController extends GetxController {
   void setColor(Color color) {
     if (currentTool.value != DrawingTool.eraser) {
       currentColor.value = color;
+      _toolColors[currentTool.value] = color;
       update();
     }
   }
@@ -242,12 +246,18 @@ class SketchController extends GetxController {
   void undo() {
     if (strokes.isNotEmpty) {
       strokes.removeLast();
+      _currentStroke = null;
+      _currentPoints = [];
+      _lastVelocity = 0.0;
       update();
     }
   }
 
   void clear() {
     strokes.clear();
+    _currentStroke = null;
+    _currentPoints = [];
+    _lastVelocity = 0.0;
     _saveToHistory();
     update();
   }

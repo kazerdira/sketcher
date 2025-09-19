@@ -61,6 +61,23 @@ void main() {
         expect(controller.currentColor.value, Colors.blue);
       });
 
+      test('remembers color per tool and defaults black', () {
+        // Default color should be black for all tools
+        for (final tool in DrawingTool.values) {
+          controller.setTool(tool);
+          if (tool != DrawingTool.eraser) {
+            expect(controller.currentColor.value, Colors.black);
+          }
+        }
+        // Change pencil color to blue and switch tools
+        controller.setTool(DrawingTool.pencil);
+        controller.setColor(Colors.blue);
+        controller.setTool(DrawingTool.pen);
+        expect(controller.currentColor.value, Colors.black);
+        controller.setTool(DrawingTool.pencil);
+        expect(controller.currentColor.value, Colors.blue);
+      });
+
       test('should not change color for eraser tool', () {
         final originalColor = controller.currentColor.value;
         controller.setTool(DrawingTool.eraser);

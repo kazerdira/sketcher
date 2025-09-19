@@ -115,9 +115,12 @@ class SketchPainter extends CustomPainter {
 
   void _drawPencilStroke(Canvas canvas, Stroke stroke, Paint paint) {
     // Pencil: textured, pressure-sensitive, slightly transparent
-    paint.style = PaintingStyle.stroke;
+    paint
+      ..style = PaintingStyle.stroke
+      ..blendMode =
+          BlendMode.srcOver; // avoid multiply artifacts over bright colors
 
-    final baseColor = paint.color; // preserve original color
+    final baseColor = paint.color;
 
     if (stroke.points.length == 1) {
       // Single point - draw a small circle
@@ -144,7 +147,7 @@ class SketchPainter extends CustomPainter {
         ..strokeWidth = avgWidth;
       canvas.drawLine(point1.offset, point2.offset, paint);
 
-      // Add texture by drawing multiple thin lines with slight offset
+      // Add subtle texture lines using low alpha; avoid colored specks on bright colors
       final random = math.Random(i);
       for (int j = 0; j < 2; j++) {
         final offset1 = Offset(
@@ -156,15 +159,19 @@ class SketchPainter extends CustomPainter {
           point2.offset.dy + random.nextDouble() * 0.5 - 0.25,
         );
 
+        final isBright = baseColor.computeLuminance() > 0.7;
+        final textureAlpha = (baseColor.opacity * 0.18).clamp(0.05, 0.2);
         final texturePaint = Paint()
-          ..color = baseColor.withOpacity(baseColor.opacity * 0.3)
+          ..color = isBright
+              ? Colors.black.withOpacity(0.12)
+              : baseColor.withOpacity(textureAlpha)
           ..strokeCap = paint.strokeCap
           ..strokeJoin = paint.strokeJoin
-          ..blendMode = paint.blendMode
+          ..blendMode = BlendMode.srcOver
           ..isAntiAlias = true
           ..filterQuality = FilterQuality.high
           ..style = PaintingStyle.stroke
-          ..strokeWidth = avgWidth * 0.3;
+          ..strokeWidth = math.max(0.5, avgWidth * 0.25);
 
         canvas.drawLine(offset1, offset2, texturePaint);
       }
@@ -184,14 +191,8 @@ class SketchPainter extends CustomPainter {
       );
       return;
     }
-
-    final path = Path();
-    path.moveTo(stroke.points.first.offset.dx, stroke.points.first.offset.dy);
-
-    for (int i = 1; i < stroke.points.length; i++) {
-      path.lineTo(stroke.points[i].offset.dx, stroke.points[i].offset.dy);
-    }
-
+    final path =
+        _createCatmullRomPath(stroke.points, closed: false, alpha: 0.5);
     canvas.drawPath(path, paint);
   }
 
@@ -222,8 +223,9 @@ class SketchPainter extends CustomPainter {
       return;
     }
 
-    // Draw main stroke
-    final path = _createSmoothPath(stroke.points);
+    // Draw main stroke with smooth path
+    final path =
+        _createCatmullRomPath(stroke.points, closed: false, alpha: 0.5);
     canvas.drawPath(path, paint);
 
     // Add soft glow effect
@@ -236,30 +238,43 @@ class SketchPainter extends CustomPainter {
   }
 
   void _drawEraserStroke(Canvas canvas, Stroke stroke, Paint paint) {
-    // Eraser: removes content, soft edges
-    paint
+    // Feathered dstOut eraser: removes stroke alpha softly without hard squares
+    final base = Paint()
       ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..isAntiAlias = true
       ..strokeWidth = stroke.width
-      ..blendMode = BlendMode.clear;
+      ..blendMode = BlendMode.dstOut
+      ..color = Colors.black.withOpacity(0.95);
+
+    final feather = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
+      ..isAntiAlias = true
+      ..strokeWidth = stroke.width * 1.5
+      ..blendMode = BlendMode.dstOut
+      ..color = Colors.black.withOpacity(0.35);
 
     if (stroke.points.length == 1) {
       canvas.drawCircle(
         stroke.points.first.offset,
+        (stroke.width * 1.5) / 2,
+        feather..style = PaintingStyle.fill,
+      );
+      canvas.drawCircle(
+        stroke.points.first.offset,
         stroke.width / 2,
-        paint..style = PaintingStyle.fill,
+        base..style = PaintingStyle.fill,
       );
       return;
     }
 
-    final path = _createSmoothPath(stroke.points);
-    canvas.drawPath(path, paint);
-
-    // Add soft edge effect
-    paint
-      ..strokeWidth = stroke.width * 0.8
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.0);
-
-    canvas.drawPath(path, paint);
+    final path =
+        _createCatmullRomPath(stroke.points, closed: false, alpha: 0.5);
+    canvas.drawPath(path, feather);
+    canvas.drawPath(path, base);
   }
 
   void _drawBrushStroke(Canvas canvas, Stroke stroke, Paint paint) {
@@ -278,7 +293,7 @@ class SketchPainter extends CustomPainter {
       return;
     }
 
-    // Create varying width path
+    // Create varying width path with smooth interpolation
     for (int i = 0; i < stroke.points.length - 1; i++) {
       final point1 = stroke.points[i];
       final point2 = stroke.points[i + 1];
@@ -334,28 +349,63 @@ class SketchPainter extends CustomPainter {
     }
   }
 
-  Path _createSmoothPath(List<DrawingPoint> points) {
+  // Catmull–Rom to Bezier conversion for smoother curves
+  Path _createCatmullRomPath(List<DrawingPoint> points,
+      {bool closed = false, double alpha = 0.5}) {
     final path = Path();
-    if (points.isEmpty) return path;
+    if (points.length < 2) {
+      if (points.isNotEmpty) {
+        path.addOval(Rect.fromCircle(center: points.first.offset, radius: 0.5));
+      }
+      return path;
+    }
 
-    path.moveTo(points.first.offset.dx, points.first.offset.dy);
+    final pts = points.map((p) => p.offset).toList(growable: true);
+    if (closed) {
+      pts.insert(0, pts[pts.length - 2]);
+      pts.addAll([pts[1], pts[2]]);
+    } else {
+      pts.insert(0, pts.first);
+      pts.add(pts.last);
+    }
 
-    for (int i = 1; i < points.length; i++) {
-      final point1 = points[i - 1];
-      final point2 = points[i];
+    path.moveTo(pts[1].dx, pts[1].dy);
 
-      // Use quadratic bezier for smooth curves
-      final controlPoint = Offset(
-        (point1.offset.dx + point2.offset.dx) / 2,
-        (point1.offset.dy + point2.offset.dy) / 2,
+    double tj(Offset pi, Offset pj) {
+      final dx = pj.dx - pi.dx;
+      final dy = pj.dy - pi.dy;
+      final dist = math.sqrt(dx * dx + dy * dy);
+      return math.pow(dist, alpha).toDouble();
+    }
+
+    for (int i = 1; i < pts.length - 2; i++) {
+      final p0 = pts[i - 1];
+      final p1 = pts[i];
+      final p2 = pts[i + 1];
+      final p3 = pts[i + 2];
+
+      final t01 = tj(p0, p1);
+      final t12 = tj(p1, p2);
+      final t23 = tj(p2, p3);
+
+      double m1x = 0.0, m1y = 0.0, m2x = 0.0, m2y = 0.0;
+      if (t12 > 0) {
+        m1x = (p2.dx - p0.dx) / (t01 + t12);
+        m1y = (p2.dy - p0.dy) / (t01 + t12);
+        m2x = (p3.dx - p1.dx) / (t12 + t23);
+        m2y = (p3.dy - p1.dy) / (t12 + t23);
+      }
+
+      final cp1 = Offset(
+        p1.dx + m1x * t12 / 3.0,
+        p1.dy + m1y * t12 / 3.0,
+      );
+      final cp2 = Offset(
+        p2.dx - m2x * t12 / 3.0,
+        p2.dy - m2y * t12 / 3.0,
       );
 
-      path.quadraticBezierTo(
-        point1.offset.dx,
-        point1.offset.dy,
-        controlPoint.dx,
-        controlPoint.dy,
-      );
+      path.cubicTo(cp1.dx, cp1.dy, cp2.dx, cp2.dy, p2.dx, p2.dy);
     }
 
     return path;
@@ -385,14 +435,7 @@ class SketchPainter extends CustomPainter {
 
     final old = oldDelegate;
 
-    if (identical(old.strokes, strokes) &&
-        identical(old.currentStroke, currentStroke) &&
-        old.backgroundImage == backgroundImage &&
-        old.imageOpacity == imageOpacity &&
-        old.isImageVisible == isImageVisible) {
-      return false;
-    }
-
+    // Repaint when stroke contents change (even if list identity is the same)
     if (old.strokes.length != strokes.length) return true;
     for (int i = 0; i < strokes.length; i++) {
       if (!identical(old.strokes[i], strokes[i])) return true;
