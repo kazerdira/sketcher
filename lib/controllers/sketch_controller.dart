@@ -49,11 +49,28 @@ class SketchController extends GetxController {
   DateTime _lastPointTime = DateTime.now();
   Offset _lastOffset = Offset.zero;
 
+  // Zoom & pan state (applies to entire scene via InteractiveViewer)
+  final TransformationController transformationController =
+      TransformationController();
+
+  double get zoomScale => transformationController.value.getMaxScaleOnAxis();
+
+  void resetZoom() {
+    transformationController.value = Matrix4.identity();
+    update();
+  }
+
   @override
   void onInit() {
     super.onInit();
     // History is initialized in constructor as well for cases
     // where onInit is not triggered (e.g., direct instantiation in tests).
+  }
+
+  @override
+  void onClose() {
+    transformationController.dispose();
+    super.onClose();
   }
 
   // Tool management

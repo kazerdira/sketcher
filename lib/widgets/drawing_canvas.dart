@@ -20,118 +20,150 @@ class DrawingCanvas extends StatefulWidget {
 
 class _DrawingCanvasState extends State<DrawingCanvas> {
   late final SketchController controller;
-  // Removed InteractiveViewer, no need for TransformationController
+  final GlobalKey _repaintKey = GlobalKey();
+  int _pointerCount = 0;
 
   bool _isDrawing = false;
   ui.Image? _backgroundImageData;
   Offset? _cursorPos;
-  final GlobalKey _repaintKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Column(
-        children: [
-          _buildToolbar(),
-          Expanded(
-            child: Container(
-              color: Colors.white,
-              child: GetBuilder<SketchController>(
-                builder: (controller) {
-                  print(
-                      '🏗️ GETBUILDER: Rebuilding canvas with ${controller.strokes.length} strokes');
-                  return SizedBox.expand(
-                    child: GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      key: const Key('drawing-area'),
-                      onPanStart: (details) {
-                        _isDrawing = true;
-                        HapticFeedback.lightImpact();
-                        controller.startStroke(details.localPosition, 1.0);
-                        setState(() => _cursorPos = details.localPosition);
-                      },
-                      onPanUpdate: (details) {
-                        if (!_isDrawing) return;
-                        controller.addPoint(details.localPosition, 1.0);
-                        setState(() => _cursorPos = details.localPosition);
-                      },
-                      onPanEnd: (_) {
-                        if (!_isDrawing) return;
-                        _isDrawing = false;
-                        controller.endStroke();
-                        setState(() => _cursorPos = null);
-                      },
-                      onPanCancel: () {
-                        if (!_isDrawing) return;
-                        _isDrawing = false;
-                        controller.endStroke();
-                        setState(() => _cursorPos = null);
-                      },
-                      child: Stack(
-                        fit: StackFit.expand,
-                        children: [
-                          RepaintBoundary(
-                            key: _repaintKey,
-                            child: CustomPaint(
-                              painter: SketchPainter(
-                                strokes: List<Stroke>.from(controller.strokes),
-                                currentStroke: controller.currentStroke,
-                                backgroundImage:
-                                    controller.backgroundImage.value,
-                                imageOpacity: controller.imageOpacity.value,
-                                isImageVisible: controller.isImageVisible.value,
-                                backgroundImageData: _backgroundImageData,
-                              ),
-                              child: const SizedBox.expand(),
-                            ),
-                          ),
-                          GetBuilder<SketchController>(builder: (_) {
-                            if (_cursorPos == null ||
-                                controller.currentTool.value !=
-                                    DrawingTool.eraser) {
-                              return const SizedBox.shrink();
-                            }
-                            final d = controller.brushSize.value;
-                            return Positioned(
-                              left: _cursorPos!.dx - d / 2,
-                              top: _cursorPos!.dy - d / 2,
-                              width: d,
-                              height: d,
-                              child: IgnorePointer(
-                                child: Stack(children: [
-                                  Container(
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Colors.black.withOpacity(0.7),
-                                        width: 1,
-                                      ),
-                                    ),
-                                  ),
-                                  Container(
-                                    margin: const EdgeInsets.all(1.5),
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: Colors.white.withOpacity(0.9),
-                                        width: 1,
-                                      ),
-                                    ),
-                                  ),
-                                ]),
-                              ),
-                            );
-                          }),
-                        ],
-                      ),
-                    ),
-                  );
+    return Column(
+      children: [
+        _buildToolbar(),
+        Expanded(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              return Listener(
+                onPointerDown: (event) {
+                  // ignore: avoid_print
+                  print('👆 pointer down');
+                  final newCount = (_pointerCount + 1).clamp(0, 10);
+                  if (newCount == 1) {
+                    _isDrawing = true;
+                    HapticFeedback.lightImpact();
+                    final scenePos = controller.transformationController
+                        .toScene(event.localPosition);
+                    controller.startStroke(scenePos, 1.0);
+                    _cursorPos = scenePos;
+                  } else {
+                    if (_isDrawing) {
+                      _isDrawing = false;
+                      controller.endStroke();
+                      _cursorPos = null;
+                    }
+                  }
+                  _pointerCount = newCount;
+                  setState(() {});
                 },
-              ),
-            ),
+                onPointerMove: (event) {
+                  if (_isDrawing && _pointerCount == 1) {
+                    final scenePos = controller.transformationController
+                        .toScene(event.localPosition);
+                    controller.addPoint(scenePos, 1.0);
+                    _cursorPos = scenePos;
+                    setState(() {});
+                  }
+                },
+                onPointerUp: (event) {
+                  // ignore: avoid_print
+                  print('👇 pointer up');
+                  if (_isDrawing && _pointerCount == 1) {
+                    _isDrawing = false;
+                    controller.endStroke();
+                    _cursorPos = null;
+                  }
+                  _pointerCount = (_pointerCount - 1).clamp(0, 10);
+                  setState(() {});
+                },
+                onPointerCancel: (event) {
+                  // ignore: avoid_print
+                  print('❌ pointer cancel');
+                  if (_isDrawing) {
+                    _isDrawing = false;
+                    controller.endStroke();
+                    _cursorPos = null;
+                  }
+                  _pointerCount = (_pointerCount - 1).clamp(0, 10);
+                  setState(() {});
+                },
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  key: const Key('drawing-area'),
+                  child: InteractiveViewer(
+                    transformationController:
+                        controller.transformationController,
+                    panEnabled: _pointerCount >= 2,
+                    scaleEnabled: _pointerCount >= 2,
+                    boundaryMargin: const EdgeInsets.all(1000),
+                    minScale: 0.5,
+                    maxScale: 8.0,
+                    clipBehavior: Clip.none,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        RepaintBoundary(
+                          key: _repaintKey,
+                          child: CustomPaint(
+                            painter: SketchPainter(
+                              strokes: List<Stroke>.from(controller.strokes),
+                              currentStroke: controller.currentStroke,
+                              backgroundImage: controller.backgroundImage.value,
+                              imageOpacity: controller.imageOpacity.value,
+                              isImageVisible: controller.isImageVisible.value,
+                              backgroundImageData: _backgroundImageData,
+                            ),
+                            child: const SizedBox.expand(),
+                          ),
+                        ),
+                        GetBuilder<SketchController>(builder: (_) {
+                          if (_cursorPos == null ||
+                              controller.currentTool.value !=
+                                  DrawingTool.eraser) {
+                            return const SizedBox.shrink();
+                          }
+                          final d = controller.brushSize.value;
+                          return Positioned(
+                            left: _cursorPos!.dx - d / 2,
+                            top: _cursorPos!.dy - d / 2,
+                            width: d,
+                            height: d,
+                            child: IgnorePointer(
+                              child: Stack(children: [
+                                Container(
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.black.withOpacity(0.7),
+                                      width: 1,
+                                    ),
+                                  ),
+                                ),
+                                Container(
+                                  margin: const EdgeInsets.all(1.5),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                      color: Colors.white.withOpacity(0.9),
+                                      width: 1,
+                                    ),
+                                  ),
+                                ),
+                              ]),
+                            ),
+                          );
+                        }),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
           ),
-        ],
-      ),
+        ),
+        _buildInlineControls(),
+      ],
     );
   }
 
@@ -310,15 +342,17 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
         _buildModernActionButton(
           Icons.undo,
           'Undo',
-          controller.strokes.isNotEmpty,
+          true,
           controller.undo,
+          key: const Key('undo-button'),
         ),
         const SizedBox(width: 6), // Reduced spacing
         _buildModernActionButton(
-          Icons.clear_all,
+          Icons.clear,
           'Clear',
-          controller.strokes.isNotEmpty,
+          true,
           controller.clear,
+          key: const Key('clear-button'),
         ),
         const SizedBox(width: 6), // Reduced spacing
         _buildModernActionButton(
@@ -326,18 +360,101 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
           'Settings',
           true,
           () => _showAdvancedSettings(),
+          key: const Key('settings-button'),
         ),
       ],
     );
   }
 
+  Widget _buildInlineControls() {
+    return GetBuilder<SketchController>(builder: (controller) {
+      return Material(
+        color: Colors.white,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                if (controller.backgroundImage.value != null) ...[
+                  IconButton(
+                    key: const Key('remove-background-button'),
+                    icon: const Icon(Icons.close, color: Colors.red),
+                    tooltip: 'Remove Image',
+                    onPressed: () {
+                      setState(() {
+                        _backgroundImageData = null;
+                      });
+                      controller.setBackgroundImage(null);
+                      controller.isImageVisible.value = false;
+                      controller.update();
+                    },
+                  ),
+                  const SizedBox(width: 8),
+                ],
+                SizedBox(
+                  width: 180,
+                  child: _buildModernSlider(
+                    'Brush Size',
+                    controller.brushSize.value,
+                    1.0,
+                    50.0,
+                    (value) => controller.setBrushSize(value),
+                    Icons.brush,
+                    sliderKey: const Key('brush-size-slider'),
+                    compact: true,
+                  ),
+                ),
+                const SizedBox(width: 16),
+                SizedBox(
+                  width: 180,
+                  child: _buildModernSlider(
+                    'Stroke Opacity',
+                    controller.toolOpacity.value,
+                    0.0,
+                    1.0,
+                    (value) => controller.setOpacity(value),
+                    Icons.opacity,
+                    sliderKey: const Key('stroke-opacity-slider'),
+                    compact: true,
+                  ),
+                ),
+                if (controller.backgroundImage.value != null) ...[
+                  const SizedBox(width: 16),
+                  SizedBox(
+                    width: 180,
+                    child: _buildModernSlider(
+                      'Image Opacity',
+                      controller.imageOpacity.value,
+                      0.0,
+                      1.0,
+                      (value) => controller.setImageOpacity(value),
+                      Icons.image,
+                      sliderKey: const Key('image-opacity-slider'),
+                      compact: true,
+                    ),
+                  ),
+                ],
+                const SizedBox(width: 8),
+                IconButton(
+                  icon: const Icon(Icons.image),
+                  tooltip: 'Background',
+                  onPressed: _showImagePicker,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
   Widget _buildModernActionButton(
-    IconData icon,
-    String tooltip,
-    bool enabled,
-    VoidCallback? onTap,
-  ) {
+      IconData icon, String tooltip, bool enabled, VoidCallback? onTap,
+      {Key? key}) {
     return Container(
+      key: key,
       width: 36, // Slightly smaller for better fit
       height: 36,
       decoration: BoxDecoration(
@@ -869,25 +986,28 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                             50.0,
                             (value) => controller.setBrushSize(value),
                             Icons.brush,
+                            sliderKey: const Key('brush-size-slider'),
                           ),
                           const SizedBox(height: 24),
                           _buildModernSlider(
                             'Stroke Opacity',
                             controller.toolOpacity.value,
-                            0.1,
+                            0.0,
                             1.0,
                             (value) => controller.setOpacity(value),
                             Icons.opacity,
+                            sliderKey: const Key('stroke-opacity-slider'),
                           ),
                           if (controller.backgroundImage.value != null) ...[
                             const SizedBox(height: 24),
                             _buildModernSlider(
                               'Image Opacity',
                               controller.imageOpacity.value,
-                              0.1,
+                              0.0,
                               1.0,
                               (value) => controller.setImageOpacity(value),
                               Icons.image,
+                              sliderKey: const Key('image-opacity-slider'),
                             ),
                           ],
                           const SizedBox(height: 32),
@@ -907,46 +1027,46 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     );
   }
 
-  Widget _buildModernSlider(
-    String label,
-    double value,
-    double min,
-    double max,
-    Function(double) onChanged,
-    IconData icon,
-  ) {
+  Widget _buildModernSlider(String label, double value, double min, double max,
+      Function(double) onChanged, IconData icon,
+      {Key? sliderKey, bool compact = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Row(
-          children: [
-            Icon(icon, size: 20, color: Colors.grey[600]),
-            const SizedBox(width: 8),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-            const Spacer(),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.grey[100],
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                value.toStringAsFixed(1),
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
+        if (!compact) ...[
+          Row(
+            children: [
+              Icon(icon, size: 20, color: Colors.grey[600]),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 12),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  value.toStringAsFixed(1),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
         SliderTheme(
           data: SliderTheme.of(context).copyWith(
             activeTrackColor: Colors.blue[600],
@@ -957,6 +1077,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
             trackHeight: 4,
           ),
           child: Slider(
+            key: sliderKey,
             value: value,
             min: min,
             max: max,
@@ -1209,6 +1330,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                     controller.update();
                     Navigator.pop(context);
                   },
+                  key: const Key('remove-background-button'),
                 ),
               ),
             ],
@@ -1219,15 +1341,13 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   }
 
   Widget _buildActionCard(
-    String title,
-    IconData icon,
-    Color color,
-    VoidCallback onTap,
-  ) {
+      String title, IconData icon, Color color, VoidCallback onTap,
+      {Key? key}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(12),
       child: Container(
+        key: key,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           color: color.withOpacity(0.1),
