@@ -25,6 +25,9 @@ dependencies:
   
   # Permissions
   permission_handler: ^11.0.1
+  
+  # Color Picker
+  flutter_colorpicker: ^1.1.0
 
 
 dev_dependencies:
