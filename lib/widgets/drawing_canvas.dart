@@ -394,45 +394,45 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                   const SizedBox(width: 8),
                 ],
                 SizedBox(
-                  width: 180,
-                  child: _buildModernSlider(
-                    'Brush Size',
-                    controller.brushSize.value,
-                    1.0,
-                    50.0,
-                    (value) => controller.setBrushSize(value),
-                    Icons.brush,
-                    sliderKey: const Key('brush-size-slider'),
+                  width: 200,
+                  child: ProSlider(
+                    label: 'Brush Size',
+                    value: controller.brushSize.value,
+                    min: 1.0,
+                    max: 50.0,
+                    icon: Icons.brush,
                     compact: true,
+                    sliderKey: const Key('brush-size-slider'),
+                    onChanged: (v) => controller.setBrushSize(v),
                   ),
                 ),
                 const SizedBox(width: 16),
                 SizedBox(
-                  width: 180,
-                  child: _buildModernSlider(
-                    'Stroke Opacity',
-                    controller.toolOpacity.value,
-                    0.0,
-                    1.0,
-                    (value) => controller.setOpacity(value),
-                    Icons.opacity,
-                    sliderKey: const Key('stroke-opacity-slider'),
+                  width: 200,
+                  child: ProSlider(
+                    label: 'Stroke Opacity',
+                    value: controller.toolOpacity.value,
+                    min: 0.0,
+                    max: 1.0,
+                    icon: Icons.opacity,
                     compact: true,
+                    sliderKey: const Key('stroke-opacity-slider'),
+                    onChanged: (v) => controller.setOpacity(v),
                   ),
                 ),
                 if (controller.backgroundImage.value != null) ...[
                   const SizedBox(width: 16),
                   SizedBox(
-                    width: 180,
-                    child: _buildModernSlider(
-                      'Image Opacity',
-                      controller.imageOpacity.value,
-                      0.0,
-                      1.0,
-                      (value) => controller.setImageOpacity(value),
-                      Icons.image,
-                      sliderKey: const Key('image-opacity-slider'),
+                    width: 200,
+                    child: ProSlider(
+                      label: 'Image Opacity',
+                      value: controller.imageOpacity.value,
+                      min: 0.0,
+                      max: 1.0,
+                      icon: Icons.image,
                       compact: true,
+                      sliderKey: const Key('image-opacity-slider'),
+                      onChanged: (v) => controller.setImageOpacity(v),
                     ),
                   ),
                 ],
@@ -1503,5 +1503,150 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
         colorText: Colors.white,
       );
     }
+  }
+}
+
+// Professional, compact slider used in the bottom inline controls
+class ProSlider extends StatelessWidget {
+  final String label;
+  final double value;
+  final double min;
+  final double max;
+  final ValueChanged<double> onChanged;
+  final IconData icon;
+  final bool compact;
+  final Key? sliderKey;
+
+  const ProSlider({
+    super.key,
+    required this.label,
+    required this.value,
+    required this.min,
+    required this.max,
+    required this.onChanged,
+    required this.icon,
+    this.compact = false,
+    this.sliderKey,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final gradient = const LinearGradient(
+      colors: [Color(0xFF4F8BFF), Color(0xFF8A63FF)],
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (!compact) ...[
+          Row(
+            children: [
+              Icon(icon, size: 18, color: Colors.grey[700]),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                      fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                decoration: BoxDecoration(
+                  color: Colors.grey[100],
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: Colors.grey[300]!),
+                ),
+                child: Text(
+                  value.toStringAsFixed(1),
+                  style: const TextStyle(
+                      fontSize: 11, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+        ],
+        SliderTheme(
+          data: SliderTheme.of(context).copyWith(
+            trackHeight: 8,
+            activeTrackColor: Colors.transparent,
+            inactiveTrackColor: Colors.transparent,
+            thumbColor: Colors.white,
+            overlayColor: const Color(0xFF4F8BFF).withOpacity(0.15),
+            thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+            overlayShape: const RoundSliderOverlayShape(overlayRadius: 18),
+            trackShape: ProGradientTrackShape(
+              gradient: gradient,
+              inactiveColor: Colors.grey[200]!,
+            ),
+          ),
+          child: Slider(
+            key: sliderKey,
+            value: value.clamp(min, max),
+            min: min,
+            max: max,
+            onChanged: onChanged,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class ProGradientTrackShape extends RoundedRectSliderTrackShape {
+  final LinearGradient gradient;
+  final Color inactiveColor;
+
+  const ProGradientTrackShape({
+    required this.gradient,
+    required this.inactiveColor,
+  });
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset offset, {
+    required RenderBox parentBox,
+    Offset? secondaryOffset,
+    required SliderThemeData sliderTheme,
+    required Animation<double> enableAnimation,
+    required TextDirection textDirection,
+    required Offset thumbCenter,
+    bool isDiscrete = false,
+    bool isEnabled = false,
+    double additionalActiveTrackHeight = 2,
+  }) {
+    final Canvas canvas = context.canvas;
+    final double trackHeight = sliderTheme.trackHeight ?? 4;
+    final Rect trackRect = Rect.fromLTWH(
+      offset.dx,
+      offset.dy + (parentBox.size.height - trackHeight) / 2,
+      parentBox.size.width,
+      trackHeight,
+    );
+    final RRect rRect = RRect.fromRectAndRadius(
+      trackRect,
+      Radius.circular(trackHeight / 2),
+    );
+
+    final Paint inactivePaint = Paint()..color = inactiveColor;
+    canvas.drawRRect(rRect, inactivePaint);
+
+    final bool ltr = textDirection == TextDirection.ltr;
+    Rect activeRect = ltr
+        ? Rect.fromLTRB(
+            trackRect.left, trackRect.top, thumbCenter.dx, trackRect.bottom)
+        : Rect.fromLTRB(
+            thumbCenter.dx, trackRect.top, trackRect.right, trackRect.bottom);
+
+    final Paint activePaint = Paint()
+      ..shader = gradient.createShader(trackRect);
+    canvas.save();
+    canvas.clipRRect(rRect);
+    canvas.drawRect(activeRect, activePaint);
+    canvas.restore();
   }
 }
