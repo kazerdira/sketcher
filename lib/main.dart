@@ -37,6 +37,7 @@ class SketchApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return GetMaterialApp(
       title: 'Professional Sketcher',
+      debugShowCheckedModeBanner: false,
       theme: ThemeData(
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
@@ -65,7 +66,7 @@ class SketchScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
+      /*  appBar: AppBar(
         title: const Text('Professional Sketcher'),
         actions: [
           GetBuilder<SketchController>(
@@ -94,7 +95,7 @@ class SketchScreen extends StatelessWidget {
             },
           ),
         ],
-      ),
+      ),*/
       body: const DrawingCanvas(),
     );
   }

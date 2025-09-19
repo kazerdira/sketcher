@@ -103,20 +103,23 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                     child: Stack(
                       fit: StackFit.expand,
                       children: [
-                        RepaintBoundary(
-                          key: _repaintKey,
-                          child: CustomPaint(
-                            painter: SketchPainter(
-                              strokes: List<Stroke>.from(controller.strokes),
-                              currentStroke: controller.currentStroke,
-                              backgroundImage: controller.backgroundImage.value,
-                              imageOpacity: controller.imageOpacity.value,
-                              isImageVisible: controller.isImageVisible.value,
-                              backgroundImageData: _backgroundImageData,
+                        GetBuilder<SketchController>(builder: (_) {
+                          return RepaintBoundary(
+                            key: _repaintKey,
+                            child: CustomPaint(
+                              painter: SketchPainter(
+                                strokes: List<Stroke>.from(controller.strokes),
+                                currentStroke: controller.currentStroke,
+                                backgroundImage:
+                                    controller.backgroundImage.value,
+                                imageOpacity: controller.imageOpacity.value,
+                                isImageVisible: controller.isImageVisible.value,
+                                backgroundImageData: _backgroundImageData,
+                              ),
+                              child: const SizedBox.expand(),
                             ),
-                            child: const SizedBox.expand(),
-                          ),
-                        ),
+                          );
+                        }),
                         GetBuilder<SketchController>(builder: (_) {
                           if (_cursorPos == null ||
                               controller.currentTool.value !=
@@ -368,86 +371,158 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
 
   Widget _buildInlineControls() {
     return GetBuilder<SketchController>(builder: (controller) {
-      return Material(
-        color: Colors.white,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-          child: SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                if (controller.backgroundImage.value != null) ...[
-                  IconButton(
-                    key: const Key('remove-background-button'),
-                    icon: const Icon(Icons.close, color: Colors.red),
-                    tooltip: 'Remove Image',
-                    onPressed: () {
-                      setState(() {
-                        _backgroundImageData = null;
-                      });
-                      controller.setBackgroundImage(null);
-                      controller.isImageVisible.value = false;
-                      controller.update();
-                    },
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        child: SafeArea(
+          top: false,
+          child: Center(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(18),
+              child: BackdropFilter(
+                filter: ui.ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.75),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: Colors.white.withOpacity(0.6)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 16,
+                        offset: const Offset(0, 6),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                ],
-                SizedBox(
-                  width: 200,
-                  child: ProSlider(
-                    label: 'Brush Size',
-                    value: controller.brushSize.value,
-                    min: 1.0,
-                    max: 50.0,
-                    icon: Icons.brush,
-                    compact: true,
-                    sliderKey: const Key('brush-size-slider'),
-                    onChanged: (v) => controller.setBrushSize(v),
-                  ),
-                ),
-                const SizedBox(width: 16),
-                SizedBox(
-                  width: 200,
-                  child: ProSlider(
-                    label: 'Stroke Opacity',
-                    value: controller.toolOpacity.value,
-                    min: 0.0,
-                    max: 1.0,
-                    icon: Icons.opacity,
-                    compact: true,
-                    sliderKey: const Key('stroke-opacity-slider'),
-                    onChanged: (v) => controller.setOpacity(v),
-                  ),
-                ),
-                if (controller.backgroundImage.value != null) ...[
-                  const SizedBox(width: 16),
-                  SizedBox(
-                    width: 200,
-                    child: ProSlider(
-                      label: 'Image Opacity',
-                      value: controller.imageOpacity.value,
-                      min: 0.0,
-                      max: 1.0,
-                      icon: Icons.image,
-                      compact: true,
-                      sliderKey: const Key('image-opacity-slider'),
-                      onChanged: (v) => controller.setImageOpacity(v),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                  child: Material(
+                    type: MaterialType.transparency,
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.center,
+                        children: [
+                          if (controller.backgroundImage.value != null) ...[
+                            _glassIconButton(
+                              icon: Icons.close,
+                              tooltip: 'Remove Image',
+                              key: const Key('remove-background-button'),
+                              color: Colors.red,
+                              onTap: () {
+                                setState(() {
+                                  _backgroundImageData = null;
+                                });
+                                controller.setBackgroundImage(null);
+                                controller.isImageVisible.value = false;
+                                controller.update();
+                              },
+                            ),
+                            _divider(),
+                          ],
+                          SizedBox(
+                            width: 220,
+                            child: ProSlider(
+                              label: 'Brush Size',
+                              value: controller.brushSize.value,
+                              min: 1.0,
+                              max: 50.0,
+                              icon: Icons.brush,
+                              compact: true,
+                              sliderKey: const Key('brush-size-slider'),
+                              onChanged: (v) => controller.setBrushSize(v),
+                            ),
+                          ),
+                          _divider(),
+                          SizedBox(
+                            width: 220,
+                            child: ProSlider(
+                              label: 'Stroke Opacity',
+                              value: controller.toolOpacity.value,
+                              min: 0.0,
+                              max: 1.0,
+                              icon: Icons.opacity,
+                              compact: true,
+                              sliderKey: const Key('stroke-opacity-slider'),
+                              onChanged: (v) => controller.setOpacity(v),
+                            ),
+                          ),
+                          if (controller.backgroundImage.value != null) ...[
+                            _divider(),
+                            SizedBox(
+                              width: 220,
+                              child: ProSlider(
+                                label: 'Image Opacity',
+                                value: controller.imageOpacity.value,
+                                min: 0.0,
+                                max: 1.0,
+                                icon: Icons.image,
+                                compact: true,
+                                sliderKey: const Key('image-opacity-slider'),
+                                onChanged: (v) => controller.setImageOpacity(v),
+                              ),
+                            ),
+                          ],
+                          _divider(),
+                          _glassIconButton(
+                            icon: Icons.image,
+                            tooltip: 'Background',
+                            onTap: _showImagePicker,
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                ],
-                const SizedBox(width: 8),
-                IconButton(
-                  icon: const Icon(Icons.image),
-                  tooltip: 'Background',
-                  onPressed: _showImagePicker,
                 ),
-              ],
+              ),
             ),
           ),
         ),
       );
     });
+  }
+
+  Widget _divider() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 12),
+      width: 1,
+      height: 28,
+      color: Colors.black.withOpacity(0.06),
+    );
+  }
+
+  Widget _glassIconButton({
+    required IconData icon,
+    required String tooltip,
+    VoidCallback? onTap,
+    Color? color,
+    Key? key,
+  }) {
+    final iconColor = color ?? Colors.grey[700]!;
+    return Tooltip(
+      message: tooltip,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          key: key,
+          width: 36,
+          height: 36,
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.55),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.white.withOpacity(0.7)),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.06),
+                blurRadius: 8,
+                offset: const Offset(0, 3),
+              )
+            ],
+          ),
+          child: Icon(icon, size: 18, color: iconColor),
+        ),
+      ),
+    );
   }
 
   Widget _buildModernActionButton(
