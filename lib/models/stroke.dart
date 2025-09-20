@@ -6,11 +6,15 @@ class DrawingPoint {
   final Offset offset;
   final double pressure;
   final double timestamp;
+  final double tiltX; // Stylus tilt in X direction (-π/2 to π/2)
+  final double tiltY; // Stylus tilt in Y direction (-π/2 to π/2)
 
   DrawingPoint({
     required this.offset,
     this.pressure = 1.0,
     required this.timestamp,
+    this.tiltX = 0.0,
+    this.tiltY = 0.0,
   });
 }
 

@@ -82,18 +82,31 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                   if (_pointerCount == 1 && inputAllowed) {
                     final scenePos = controller.transformationController
                         .toScene(event.localPosition);
+                    // Extract stylus tilt data for enhanced drawing (available on supported devices)
+                    final tiltX = event.orientation; // Stylus orientation/tilt
+                    final tiltY =
+                        0.0; // Flutter doesn't expose separate tiltY yet
+
                     if (!_isDrawing && _pendingTap && _downPos != null) {
                       final moved = (scenePos - _downPos!).distance;
-                      if (moved >= _touchSlop) {
+                      // Adjust touch slop based on zoom level - at high zoom, use smaller slop in scene coordinates
+                      final zoomScale = controller
+                          .transformationController.value
+                          .getMaxScaleOnAxis();
+                      final adjustedTouchSlop = _touchSlop / zoomScale;
+                      if (moved >= adjustedTouchSlop) {
                         // Start drawing after surpassing touch slop.
                         _isDrawing = true;
                         _pendingTap = false;
                         HapticFeedback.lightImpact();
-                        controller.startStroke(_downPos!, 1.0);
-                        controller.addPoint(scenePos, 1.0);
+                        controller.startStroke(_downPos!, 1.0,
+                            tiltX: tiltX, tiltY: tiltY);
+                        controller.addPoint(scenePos, 1.0,
+                            tiltX: tiltX, tiltY: tiltY);
                       }
                     } else if (_isDrawing) {
-                      controller.addPoint(scenePos, 1.0);
+                      controller.addPoint(scenePos, 1.0,
+                          tiltX: tiltX, tiltY: tiltY);
                     }
                     _cursorPos = scenePos;
                     setState(() {});
@@ -115,7 +128,10 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                       _cursorPos = null;
                     } else if (_pendingTap && _downPos != null) {
                       // Treat as a dot tap if no multitouch occurred and no move beyond slop.
-                      controller.startStroke(_downPos!, 1.0);
+                      final tiltX = event.orientation;
+                      final tiltY = 0.0;
+                      controller.startStroke(_downPos!, 1.0,
+                          tiltX: tiltX, tiltY: tiltY);
                       controller.endStroke();
                       _cursorPos = null;
                     }

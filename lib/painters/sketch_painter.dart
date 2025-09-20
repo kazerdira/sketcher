@@ -15,6 +15,10 @@ class SketchPainter extends CustomPainter {
   final Rect? viewport;
   final Rect? anchoredImageRect;
 
+  // Performance optimization: cache for stroke bounds
+  static final Map<Stroke, Rect> _boundsCache = <Stroke, Rect>{};
+  static const int _maxCacheSize = 500;
+
   SketchPainter({
     required this.strokes,
     this.currentStroke,
@@ -36,11 +40,10 @@ class SketchPainter extends CustomPainter {
     // Set up canvas for drawing strokes
     canvas.saveLayer(Rect.fromLTWH(0, 0, size.width, size.height), Paint());
 
-    // Draw all completed strokes (with optional viewport culling)
+    // Draw all completed strokes (with enhanced viewport culling)
     for (final stroke in strokes) {
       if (viewport != null && stroke.points.isNotEmpty) {
-        final bounds = _getBoundingRect(stroke.points).inflate(stroke.width);
-        if (!bounds.overlaps(viewport!)) continue;
+        if (!_isStrokeVisible(stroke)) continue;
       }
       _drawStroke(canvas, stroke);
     }
@@ -48,9 +51,11 @@ class SketchPainter extends CustomPainter {
     // Draw current stroke being drawn
     if (currentStroke != null) {
       if (viewport != null && currentStroke!.points.isNotEmpty) {
-        final b = _getBoundingRect(currentStroke!.points)
-            .inflate(currentStroke!.width);
-        if (b.overlaps(viewport!)) {
+        // For current stroke, be more generous with culling at high zoom levels
+        final strokeBounds = _getBoundingRect(currentStroke!.points);
+        final generousInflation = math.max(currentStroke!.width * 2, 50.0);
+        final inflatedBounds = strokeBounds.inflate(generousInflation);
+        if (inflatedBounds.overlaps(viewport!)) {
           _drawStroke(canvas, currentStroke!);
         }
       } else {
@@ -770,6 +775,38 @@ class SketchPainter extends CustomPainter {
     }
 
     return Rect.fromLTRB(minX, minY, maxX, maxY);
+  }
+
+  // Enhanced viewport culling with bounds caching
+  bool _isStrokeVisible(Stroke stroke) {
+    if (viewport == null || stroke.points.isEmpty) return true;
+
+    // Use cached bounds or compute new ones
+    Rect bounds;
+    if (_boundsCache.containsKey(stroke)) {
+      bounds = _boundsCache[stroke]!;
+    } else {
+      bounds = _getBoundingRect(stroke.points);
+      _cacheStrokeBounds(stroke, bounds);
+    }
+
+    // Be more generous with inflation at high zoom levels
+    // At high zoom, even small strokes should be visible if they're near the viewport
+    final baseInflation = stroke.width;
+    final generousInflation = math.max(baseInflation, 20.0);
+    final inflatedBounds = bounds.inflate(generousInflation);
+    return viewport!.overlaps(inflatedBounds);
+  }
+
+  void _cacheStrokeBounds(Stroke stroke, Rect bounds) {
+    if (_boundsCache.length >= _maxCacheSize) {
+      // Clear oldest entries to prevent memory issues
+      final keys = _boundsCache.keys.take(_maxCacheSize ~/ 2).toList();
+      for (final key in keys) {
+        _boundsCache.remove(key);
+      }
+    }
+    _boundsCache[stroke] = bounds;
   }
 
   @override

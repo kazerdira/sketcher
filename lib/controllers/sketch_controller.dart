@@ -158,12 +158,15 @@ class SketchController extends GetxController {
   }
 
   // Drawing methods
-  void startStroke(Offset point, double pressure) {
+  void startStroke(Offset point, double pressure,
+      {double tiltX = 0.0, double tiltY = 0.0}) {
     _currentPoints = [];
     final drawingPoint = DrawingPoint(
       offset: point,
       pressure: pressure,
       timestamp: DateTime.now().millisecondsSinceEpoch.toDouble(),
+      tiltX: tiltX,
+      tiltY: tiltY,
     );
 
     _currentPoints.add(drawingPoint);
@@ -177,7 +180,8 @@ class SketchController extends GetxController {
     update();
   }
 
-  void addPoint(Offset point, double pressure) {
+  void addPoint(Offset point, double pressure,
+      {double tiltX = 0.0, double tiltY = 0.0}) {
     if (_currentPoints.isEmpty) return;
 
     final now = DateTime.now();
@@ -195,6 +199,8 @@ class SketchController extends GetxController {
       offset: point,
       pressure: pressure,
       timestamp: now.millisecondsSinceEpoch.toDouble(),
+      tiltX: tiltX,
+      tiltY: tiltY,
     );
 
     _currentPoints.add(drawingPoint);
