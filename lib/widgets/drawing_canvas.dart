@@ -155,6 +155,17 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                       fit: StackFit.expand,
                       children: [
                         GetBuilder<SketchController>(builder: (_) {
+                          if (controller.imageRect.value == null &&
+                              _backgroundImageData != null) {
+                            WidgetsBinding.instance.addPostFrameCallback((_) {
+                              final sz = Size(
+                                  constraints.maxWidth, constraints.maxHeight);
+                              final rect = _computeAnchoredImageRect(
+                                  sz, _backgroundImageData!);
+                              controller.imageRect.value = rect;
+                              controller.update();
+                            });
+                          }
                           return RepaintBoundary(
                             key: _repaintKey,
                             child: CustomPaint(
@@ -167,6 +178,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                                 isImageVisible: controller.isImageVisible.value,
                                 backgroundImageData: _backgroundImageData,
                                 viewport: _computeSceneViewport(constraints),
+                                anchoredImageRect: controller.imageRect.value,
                               ),
                               child: const SizedBox.expand(),
                             ),
@@ -924,6 +936,20 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
         );
       },
     );
+  }
+
+  // Compute a destination rect (in scene coords) that fits the image once
+  Rect _computeAnchoredImageRect(Size canvasSize, ui.Image image) {
+    final imgW = image.width.toDouble();
+    final imgH = image.height.toDouble();
+    final scale = (canvasSize.width / imgW).clamp(0.0, double.infinity);
+    final scaleY = (canvasSize.height / imgH).clamp(0.0, double.infinity);
+    final fit = scaleY < scale ? scaleY : scale; // min for contain
+    final w = imgW * fit;
+    final h = imgH * fit;
+    final dx = (canvasSize.width - w) / 2;
+    final dy = (canvasSize.height - h) / 2;
+    return Rect.fromLTWH(dx, dy, w, h);
   }
 
   Widget _buildProfessionalColorPalette(
@@ -1764,6 +1790,13 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       });
       // Use MemoryImage to avoid platform-specific file issues
       controller.setBackgroundImage(MemoryImage(bytes));
+      // Anchor image rect to current canvas size
+      final renderBox =
+          _repaintKey.currentContext?.findRenderObject() as RenderBox?;
+      if (renderBox != null) {
+        final rect = _computeAnchoredImageRect(renderBox.size, img);
+        controller.imageRect.value = rect;
+      }
       controller.isImageVisible.value = true;
       controller.update();
     } catch (e) {
@@ -1790,6 +1823,12 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
         _backgroundImageData = img;
       });
       controller.setBackgroundImage(MemoryImage(bytes));
+      final renderBox =
+          _repaintKey.currentContext?.findRenderObject() as RenderBox?;
+      if (renderBox != null) {
+        final rect = _computeAnchoredImageRect(renderBox.size, img);
+        controller.imageRect.value = rect;
+      }
       controller.isImageVisible.value = true;
       controller.update();
     } catch (e) {

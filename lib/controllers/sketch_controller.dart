@@ -25,6 +25,8 @@ class SketchController extends GetxController {
   final backgroundImage = Rx<ImageProvider?>(null);
   final imageOpacity = 0.5.obs;
   final isImageVisible = true.obs;
+  // Anchored background image destination rect in scene coordinates
+  final Rx<Rect?> imageRect = Rx<Rect?>(null);
 
   // Current stroke being drawn
   Stroke? _currentStroke;
@@ -342,6 +344,8 @@ class SketchController extends GetxController {
   // Background image management
   void setBackgroundImage(ImageProvider? image) {
     backgroundImage.value = image;
+    // Reset anchored rect when image changes/removed
+    imageRect.value = null;
     update();
   }
 

@@ -13,6 +13,7 @@ class SketchPainter extends CustomPainter {
   final bool isImageVisible;
   final ui.Image? backgroundImageData;
   final Rect? viewport;
+  final Rect? anchoredImageRect;
 
   SketchPainter({
     required this.strokes,
@@ -22,6 +23,7 @@ class SketchPainter extends CustomPainter {
     this.isImageVisible = true,
     this.backgroundImageData,
     this.viewport,
+    this.anchoredImageRect,
   });
 
   @override
@@ -71,7 +73,15 @@ class SketchPainter extends CustomPainter {
       backgroundImageData!.height.toDouble(),
     );
 
-    // Calculate scaling to fit the canvas
+    final srcRect = Rect.fromLTWH(0, 0, imageSize.width, imageSize.height);
+
+    if (anchoredImageRect != null) {
+      canvas.drawImageRect(
+          backgroundImageData!, srcRect, anchoredImageRect!, paint);
+      return;
+    }
+
+    // Fallback: fit to current canvas size
     final scale = math.min(
       size.width / imageSize.width,
       size.height / imageSize.height,
@@ -87,7 +97,6 @@ class SketchPainter extends CustomPainter {
       (size.height - scaledSize.height) / 2,
     );
 
-    final srcRect = Rect.fromLTWH(0, 0, imageSize.width, imageSize.height);
     final dstRect = Rect.fromLTWH(
       offset.dx,
       offset.dy,
@@ -810,6 +819,12 @@ class SketchPainter extends CustomPainter {
     }
     if (old.isImageVisible != isImageVisible) {
       print('🎨 REPAINT: Image visibility changed - repaint TRUE');
+      return true;
+    }
+
+    // Repaint when anchored image rect changes
+    if (old.anchoredImageRect != anchoredImageRect) {
+      print('🎨 REPAINT: Anchored image rect changed - repaint TRUE');
       return true;
     }
 
