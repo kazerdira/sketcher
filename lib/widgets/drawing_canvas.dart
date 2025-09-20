@@ -26,6 +26,9 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   bool _isDrawing = false;
   ui.Image? _backgroundImageData;
   Offset? _cursorPos;
+  Offset? _downPos;
+  bool _pendingTap = false;
+  static const double _touchSlop = 8.0;
 
   @override
   Widget build(BuildContext context) {
@@ -40,14 +43,16 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                   // ignore: avoid_print
                   print('👆 pointer down');
                   final newCount = (_pointerCount + 1).clamp(0, 10);
+                  final scenePos = controller.transformationController
+                      .toScene(event.localPosition);
                   if (newCount == 1) {
-                    _isDrawing = true;
-                    HapticFeedback.lightImpact();
-                    final scenePos = controller.transformationController
-                        .toScene(event.localPosition);
-                    controller.startStroke(scenePos, 1.0);
+                    // Defer starting stroke until we see movement or a tap completes.
+                    _downPos = scenePos;
+                    _pendingTap = true;
                     _cursorPos = scenePos;
                   } else {
+                    // Multi-touch: cancel any pending tap or drawing.
+                    _pendingTap = false;
                     if (_isDrawing) {
                       _isDrawing = false;
                       controller.endStroke();
@@ -58,10 +63,22 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                   setState(() {});
                 },
                 onPointerMove: (event) {
-                  if (_isDrawing && _pointerCount == 1) {
+                  if (_pointerCount == 1) {
                     final scenePos = controller.transformationController
                         .toScene(event.localPosition);
-                    controller.addPoint(scenePos, 1.0);
+                    if (!_isDrawing && _pendingTap && _downPos != null) {
+                      final moved = (scenePos - _downPos!).distance;
+                      if (moved >= _touchSlop) {
+                        // Start drawing after surpassing touch slop.
+                        _isDrawing = true;
+                        _pendingTap = false;
+                        HapticFeedback.lightImpact();
+                        controller.startStroke(_downPos!, 1.0);
+                        controller.addPoint(scenePos, 1.0);
+                      }
+                    } else if (_isDrawing) {
+                      controller.addPoint(scenePos, 1.0);
+                    }
                     _cursorPos = scenePos;
                     setState(() {});
                   }
@@ -69,10 +86,19 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                 onPointerUp: (event) {
                   // ignore: avoid_print
                   print('👇 pointer up');
-                  if (_isDrawing && _pointerCount == 1) {
-                    _isDrawing = false;
-                    controller.endStroke();
-                    _cursorPos = null;
+                  if (_pointerCount == 1) {
+                    if (_isDrawing) {
+                      _isDrawing = false;
+                      controller.endStroke();
+                      _cursorPos = null;
+                    } else if (_pendingTap && _downPos != null) {
+                      // Treat as a dot tap if no multitouch occurred and no move beyond slop.
+                      controller.startStroke(_downPos!, 1.0);
+                      controller.endStroke();
+                      _cursorPos = null;
+                    }
+                    _pendingTap = false;
+                    _downPos = null;
                   }
                   _pointerCount = (_pointerCount - 1).clamp(0, 10);
                   setState(() {});
@@ -85,6 +111,9 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                     controller.endStroke();
                     _cursorPos = null;
                   }
+                  _pendingTap = false;
+                  _downPos = null;
+
                   _pointerCount = (_pointerCount - 1).clamp(0, 10);
                   setState(() {});
                 },
