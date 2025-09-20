@@ -3,6 +3,7 @@ import 'package:get/get.dart';
 import '../models/stroke.dart';
 import '../models/drawing_tool.dart';
 import '../models/brush_mode.dart';
+import '../painters/sketch_painter.dart';
 
 class SketchController extends GetxController {
   SketchController() {
@@ -322,10 +323,15 @@ class SketchController extends GetxController {
   void undo() {
     print('🔄 UNDO: Called - strokes.length = ${strokes.length}');
     if (strokes.isNotEmpty) {
+      final removedStroke = strokes.last;
       strokes.removeLast();
       _currentStroke = null;
       _currentPoints = [];
       _lastVelocity = 0.0;
+
+      // Phase 2: Invalidate cache for removed stroke
+      SketchPainter.invalidateStroke(removedStroke);
+
       strokes.refresh(); // Force GetX observable update
       update();
     } else {}
@@ -336,6 +342,10 @@ class SketchController extends GetxController {
     _currentStroke = null;
     _currentPoints = [];
     _lastVelocity = 0.0;
+
+    // Phase 2: Clear entire stroke cache
+    SketchPainter.clearStrokeCache();
+
     _saveToHistory();
     update();
   }
