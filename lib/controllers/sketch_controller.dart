@@ -16,6 +16,10 @@ class SketchController extends GetxController {
   final brushSize = 5.0.obs;
   final toolOpacity = 1.0.obs;
   final currentBrushMode = Rx<BrushMode?>(null);
+  // Brush tuning state
+  final calligraphyNibAngleDeg = 40.0.obs; // 0–90
+  final calligraphyNibWidthFactor = 1.0.obs; // ~0.4–1.8
+  final pastelGrainDensity = 1.0.obs; // ~0.5–2.0
   final backgroundImage = Rx<ImageProvider?>(null);
   final imageOpacity = 0.5.obs;
   final isImageVisible = true.obs;
@@ -99,6 +103,24 @@ class SketchController extends GetxController {
     if (_currentPoints.isNotEmpty) {
       _updateCurrentStroke();
     }
+    update();
+  }
+
+  void setCalligraphyNibAngle(double degrees) {
+    calligraphyNibAngleDeg.value = degrees.clamp(0.0, 90.0);
+    if (_currentPoints.isNotEmpty) _updateCurrentStroke();
+    update();
+  }
+
+  void setCalligraphyNibWidthFactor(double factor) {
+    calligraphyNibWidthFactor.value = factor.clamp(0.3, 2.5);
+    if (_currentPoints.isNotEmpty) _updateCurrentStroke();
+    update();
+  }
+
+  void setPastelGrainDensity(double density) {
+    pastelGrainDensity.value = density.clamp(0.3, 3.0);
+    if (_currentPoints.isNotEmpty) _updateCurrentStroke();
     update();
   }
 
@@ -195,6 +217,9 @@ class SketchController extends GetxController {
       brushMode: currentTool.value == DrawingTool.brush
           ? currentBrushMode.value
           : null,
+      calligraphyNibAngleDeg: calligraphyNibAngleDeg.value,
+      calligraphyNibWidthFactor: calligraphyNibWidthFactor.value,
+      pastelGrainDensity: pastelGrainDensity.value,
     );
 
     strokes.add(finalStroke);
@@ -219,6 +244,9 @@ class SketchController extends GetxController {
       brushMode: currentTool.value == DrawingTool.brush
           ? currentBrushMode.value
           : null,
+      calligraphyNibAngleDeg: calligraphyNibAngleDeg.value,
+      calligraphyNibWidthFactor: calligraphyNibWidthFactor.value,
+      pastelGrainDensity: pastelGrainDensity.value,
     );
   }
 

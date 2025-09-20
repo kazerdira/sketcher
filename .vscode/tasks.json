@@ -12,6 +12,32 @@
 				"$dart-json"
 			],
 			"group": "build"
+		},
+		{
+			"label": "flutter test -r compact",
+			"type": "shell",
+			"command": "flutter",
+			"args": [
+				"test",
+				"-r",
+				"compact"
+			],
+			"problemMatcher": [
+				"$dart-json"
+			],
+			"group": "build"
+		},
+		{
+			"label": "flutter test -r compact",
+			"type": "shell",
+			"command": "flutter",
+			"args": [
+				"test",
+				"-r",
+				"compact"
+			],
+			"isBackground": false,
+			"group": "build"
 		}
 	]
 }

@@ -549,7 +549,8 @@ class SketchPainter extends CustomPainter {
         // Calligraphy: flat nib with fixed angle causing thick/thin variation
         {
           final baseColor = paint.color;
-          final nibAngleDeg = 40.0; // classic nib angle
+          final nibAngleDeg =
+              stroke.calligraphyNibAngleDeg ?? 40.0; // default if unset
           final nibAngle = nibAngleDeg * math.pi / 180.0;
           final nibDir = Offset(math.cos(nibAngle), math.sin(nibAngle));
           for (int i = 0; i < points.length - 1; i++) {
@@ -562,9 +563,11 @@ class SketchPainter extends CustomPainter {
             // Thickness follows |sin(theta)| between stroke and nib direction
             final cross = (t.dx * nibDir.dy - t.dy * nibDir.dx).abs();
             final pressure = (a.pressure + b.pressure) * 0.5;
+            final widthFactor =
+                (stroke.calligraphyNibWidthFactor ?? 1.0).clamp(0.3, 2.5);
             final thickness = math.max(
               0.6,
-              stroke.width * (0.35 + 0.9 * cross) * pressure,
+              stroke.width * widthFactor * (0.35 + 0.9 * cross) * pressure,
             );
             final core = Paint()
               ..color = baseColor.withValues(alpha: stroke.opacity)
@@ -610,7 +613,9 @@ class SketchPainter extends CustomPainter {
             canvas.drawCircle(p.offset, w * 0.42, body);
 
             // Grain speckles around
-            final grains = (w * 0.8).round().clamp(8, 28);
+            final grainDensity =
+                (stroke.pastelGrainDensity ?? 1.0).clamp(0.3, 3.0);
+            final grains = (w * 0.8 * grainDensity).round().clamp(4, 50);
             for (int i = 0; i < grains; i++) {
               final ang = rnd.nextDouble() * 2 * math.pi;
               final dist = rnd.nextDouble() * w * 0.6;

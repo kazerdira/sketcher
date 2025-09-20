@@ -619,6 +619,56 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                                         sliderKey:
                                             const Key('stroke-opacity-slider'),
                                       ),
+                                      // Brush-specific tuning
+                                      if (controller.currentTool.value ==
+                                              DrawingTool.brush &&
+                                          controller.currentBrushMode.value ==
+                                              BrushMode.calligraphy) ...[
+                                        const SizedBox(height: 12),
+                                        ProSlider(
+                                          label: 'Nib Angle (°)',
+                                          value: controller
+                                              .calligraphyNibAngleDeg.value,
+                                          min: 0.0,
+                                          max: 90.0,
+                                          onChanged: (v) => controller
+                                              .setCalligraphyNibAngle(v),
+                                          icon: Icons.rotate_right,
+                                          sliderKey: const Key(
+                                              'calligraphy-nib-angle-slider'),
+                                        ),
+                                        const SizedBox(height: 12),
+                                        ProSlider(
+                                          label: 'Nib Width Factor',
+                                          value: controller
+                                              .calligraphyNibWidthFactor.value,
+                                          min: 0.3,
+                                          max: 2.5,
+                                          onChanged: (v) => controller
+                                              .setCalligraphyNibWidthFactor(v),
+                                          icon: Icons.format_size,
+                                          sliderKey: const Key(
+                                              'calligraphy-nib-width-slider'),
+                                        ),
+                                      ],
+                                      if (controller.currentTool.value ==
+                                              DrawingTool.brush &&
+                                          controller.currentBrushMode.value ==
+                                              BrushMode.pastel) ...[
+                                        const SizedBox(height: 12),
+                                        ProSlider(
+                                          label: 'Grain Density',
+                                          value: controller
+                                              .pastelGrainDensity.value,
+                                          min: 0.3,
+                                          max: 3.0,
+                                          onChanged: (v) => controller
+                                              .setPastelGrainDensity(v),
+                                          icon: Icons.grain,
+                                          sliderKey: const Key(
+                                              'pastel-grain-density-slider'),
+                                        ),
+                                      ],
                                       if (controller.backgroundImage.value !=
                                           null) ...[
                                         const SizedBox(height: 12),

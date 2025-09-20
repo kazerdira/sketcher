@@ -23,6 +23,10 @@ class Stroke {
   final BlendMode blendMode;
   final bool isEraser;
   final BrushMode? brushMode;
+  // Brush tuning params (optional, used by specific brush modes)
+  final double? calligraphyNibAngleDeg; // 0–90 degrees
+  final double? calligraphyNibWidthFactor; // ~0.4–1.8
+  final double? pastelGrainDensity; // ~0.5–2.0
 
   Stroke({
     required this.points,
@@ -33,6 +37,9 @@ class Stroke {
     this.blendMode = BlendMode.srcOver,
     this.isEraser = false,
     this.brushMode,
+    this.calligraphyNibAngleDeg,
+    this.calligraphyNibWidthFactor,
+    this.pastelGrainDensity,
   });
 
   Stroke copyWith({
@@ -44,6 +51,9 @@ class Stroke {
     BlendMode? blendMode,
     bool? isEraser,
     BrushMode? brushMode,
+    double? calligraphyNibAngleDeg,
+    double? calligraphyNibWidthFactor,
+    double? pastelGrainDensity,
   }) {
     return Stroke(
       points: points ?? this.points,
@@ -54,6 +64,11 @@ class Stroke {
       blendMode: blendMode ?? this.blendMode,
       isEraser: isEraser ?? this.isEraser,
       brushMode: brushMode ?? this.brushMode,
+      calligraphyNibAngleDeg:
+          calligraphyNibAngleDeg ?? this.calligraphyNibAngleDeg,
+      calligraphyNibWidthFactor:
+          calligraphyNibWidthFactor ?? this.calligraphyNibWidthFactor,
+      pastelGrainDensity: pastelGrainDensity ?? this.pastelGrainDensity,
     );
   }
 }
