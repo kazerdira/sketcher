@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 import 'dart:math' as math;
 import '../models/stroke.dart';
 import '../models/drawing_tool.dart';
+import '../models/brush_mode.dart';
 
 class SketchPainter extends CustomPainter {
   final List<Stroke> strokes;
@@ -11,6 +12,7 @@ class SketchPainter extends CustomPainter {
   final double imageOpacity;
   final bool isImageVisible;
   final ui.Image? backgroundImageData;
+  final Rect? viewport;
 
   SketchPainter({
     required this.strokes,
@@ -19,13 +21,11 @@ class SketchPainter extends CustomPainter {
     this.imageOpacity = 0.5,
     this.isImageVisible = true,
     this.backgroundImageData,
+    this.viewport,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    print(
-        '🎨 PAINT: Starting paint with ${strokes.length} strokes, currentStroke: ${currentStroke != null}');
-
     // Draw background image if available
     if (isImageVisible && backgroundImageData != null) {
       _drawBackgroundImage(canvas, size);
@@ -34,25 +34,36 @@ class SketchPainter extends CustomPainter {
     // Set up canvas for drawing strokes
     canvas.saveLayer(Rect.fromLTWH(0, 0, size.width, size.height), Paint());
 
-    // Draw all completed strokes
+    // Draw all completed strokes (with optional viewport culling)
     for (final stroke in strokes) {
+      if (viewport != null && stroke.points.isNotEmpty) {
+        final bounds = _getBoundingRect(stroke.points).inflate(stroke.width);
+        if (!bounds.overlaps(viewport!)) continue;
+      }
       _drawStroke(canvas, stroke);
     }
 
     // Draw current stroke being drawn
     if (currentStroke != null) {
-      _drawStroke(canvas, currentStroke!);
+      if (viewport != null && currentStroke!.points.isNotEmpty) {
+        final b = _getBoundingRect(currentStroke!.points)
+            .inflate(currentStroke!.width);
+        if (b.overlaps(viewport!)) {
+          _drawStroke(canvas, currentStroke!);
+        }
+      } else {
+        _drawStroke(canvas, currentStroke!);
+      }
     }
 
     canvas.restore();
-    print('🎨 PAINT: Finished painting');
   }
 
   void _drawBackgroundImage(Canvas canvas, Size size) {
     if (backgroundImageData == null) return;
 
     final paint = Paint()
-      ..color = Colors.white.withOpacity(imageOpacity)
+      ..color = Colors.white.withValues(alpha: imageOpacity)
       ..filterQuality = FilterQuality.high;
 
     final imageSize = Size(
@@ -91,7 +102,7 @@ class SketchPainter extends CustomPainter {
     if (stroke.points.isEmpty) return;
 
     final paint = Paint()
-      ..color = stroke.color.withOpacity(stroke.opacity)
+      ..color = stroke.color.withValues(alpha: stroke.opacity)
       ..strokeCap = _getStrokeCap(stroke.tool)
       ..strokeJoin = StrokeJoin.round
       ..blendMode = stroke.blendMode
@@ -126,20 +137,23 @@ class SketchPainter extends CustomPainter {
 
     final baseColor = paint.color;
 
-    if (stroke.points.length == 1) {
+    // Work on an interpolated set of points to reduce gaps/dots
+    final points = _interpolatePoints(stroke.points, maxSegmentLen: 3.0);
+
+    if (points.length == 1) {
       // Single point - draw a small circle
       canvas.drawCircle(
-        stroke.points.first.offset,
-        stroke.width / 2,
+        points.first.offset,
+        (stroke.width * points.first.pressure) / 2,
         paint..style = PaintingStyle.fill,
       );
       return;
     }
 
     // Create path with varying width based on pressure
-    for (int i = 0; i < stroke.points.length - 1; i++) {
-      final point1 = stroke.points[i];
-      final point2 = stroke.points[i + 1];
+    for (int i = 0; i < points.length - 1; i++) {
+      final point1 = points[i];
+      final point2 = points[i + 1];
 
       final width1 = stroke.width * point1.pressure;
       final width2 = stroke.width * point2.pressure;
@@ -152,7 +166,7 @@ class SketchPainter extends CustomPainter {
       canvas.drawLine(point1.offset, point2.offset, paint);
 
       // Add subtle texture lines using low alpha; avoid colored specks on bright colors
-      final random = math.Random(i);
+      final random = math.Random(i * 31);
       for (int j = 0; j < 2; j++) {
         final offset1 = Offset(
           point1.offset.dx + random.nextDouble() * 0.5 - 0.25,
@@ -164,11 +178,11 @@ class SketchPainter extends CustomPainter {
         );
 
         final isBright = baseColor.computeLuminance() > 0.7;
-        final textureAlpha = (baseColor.opacity * 0.18).clamp(0.05, 0.2);
+        final textureAlpha = (baseColor.a * 0.18).clamp(0.05, 0.2);
         final texturePaint = Paint()
           ..color = isBright
-              ? Colors.black.withOpacity(0.12)
-              : baseColor.withOpacity(textureAlpha)
+              ? Colors.black.withValues(alpha: 0.12)
+              : baseColor.withValues(alpha: textureAlpha)
           ..strokeCap = paint.strokeCap
           ..strokeJoin = paint.strokeJoin
           ..blendMode = BlendMode.srcOver
@@ -208,8 +222,8 @@ class SketchPainter extends CustomPainter {
     final rect = _getBoundingRect(stroke.points);
     final gradient = RadialGradient(
       colors: [
-        stroke.color.withOpacity(stroke.opacity * 0.8),
-        stroke.color.withOpacity(stroke.opacity * 0.4),
+        stroke.color.withValues(alpha: stroke.opacity * 0.8),
+        stroke.color.withValues(alpha: stroke.opacity * 0.4),
       ],
       stops: const [0.0, 1.0],
     );
@@ -235,7 +249,7 @@ class SketchPainter extends CustomPainter {
     // Add soft glow effect
     paint
       ..strokeWidth = stroke.width * 1.5
-      ..color = stroke.color.withOpacity(stroke.opacity * 0.2)
+      ..color = stroke.color.withValues(alpha: stroke.opacity * 0.2)
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0);
 
     canvas.drawPath(path, paint);
@@ -250,7 +264,7 @@ class SketchPainter extends CustomPainter {
       ..isAntiAlias = true
       ..strokeWidth = stroke.width
       ..blendMode = BlendMode.dstOut
-      ..color = Colors.black.withOpacity(0.95);
+      ..color = Colors.black.withValues(alpha: 0.95);
 
     final feather = Paint()
       ..style = PaintingStyle.stroke
@@ -259,7 +273,7 @@ class SketchPainter extends CustomPainter {
       ..isAntiAlias = true
       ..strokeWidth = stroke.width * 1.5
       ..blendMode = BlendMode.dstOut
-      ..color = Colors.black.withOpacity(0.35);
+      ..color = Colors.black.withValues(alpha: 0.35);
 
     if (stroke.points.length == 1) {
       canvas.drawCircle(
@@ -285,10 +299,15 @@ class SketchPainter extends CustomPainter {
     // Brush: artistic, pressure-sensitive, textured
     paint.style = PaintingStyle.stroke;
 
-    if (stroke.points.length == 1) {
-      final width = stroke.width * stroke.points.first.pressure;
+    // Interpolate to keep strokes continuous
+    final adaptiveSegLen = math.max(1.5, math.min(3.0, stroke.width * 0.5));
+    final points =
+        _interpolatePoints(stroke.points, maxSegmentLen: adaptiveSegLen);
+
+    if (points.length == 1) {
+      final width = stroke.width * points.first.pressure;
       canvas.drawCircle(
-        stroke.points.first.offset,
+        points.first.offset,
         width / 2,
         paint
           ..style = PaintingStyle.fill
@@ -297,40 +316,346 @@ class SketchPainter extends CustomPainter {
       return;
     }
 
-    // Create varying width path with smooth interpolation
-    for (int i = 0; i < stroke.points.length - 1; i++) {
-      final point1 = stroke.points[i];
-      final point2 = stroke.points[i + 1];
+    // If an advanced brush mode is selected, render accordingly
+    switch (stroke.brushMode) {
+      case null:
+        // Default textured bristle lines
+        for (int i = 0; i < points.length - 1; i++) {
+          final point1 = points[i];
+          final point2 = points[i + 1];
+          final width1 = stroke.width * point1.pressure;
+          final width2 = stroke.width * point2.pressure;
+          final bristleCount = (stroke.width / 3).round().clamp(3, 10);
+          for (int bristle = 0; bristle < bristleCount; bristle++) {
+            final offset = (bristle - bristleCount / 2) * 0.5;
+            final perpendicular =
+                _getPerpendicular(point1.offset, point2.offset);
+            final bristleOffset = perpendicular * offset;
+            final bristleStart = point1.offset + bristleOffset;
+            final bristleEnd = point2.offset + bristleOffset;
+            final bristleWidth =
+                ((width1 + width2) / 2) * (0.7 + 0.3 * (bristle % 2));
+            canvas.drawLine(
+              bristleStart,
+              bristleEnd,
+              paint
+                ..strokeWidth = bristleWidth / bristleCount
+                ..color = paint.color.withValues(
+                  alpha: paint.color.a *
+                      (0.8 + 0.2 * math.sin(bristle.toDouble())),
+                ),
+            );
+          }
+        }
+        break;
+      case BrushMode.charcoal:
+        // Overlapping dabs with grainy texture
+        final baseColor = paint.color;
+        final dabPaint = Paint()
+          ..style = PaintingStyle.fill
+          ..isAntiAlias = true;
+        for (final p in points) {
+          final w = (stroke.width * p.pressure).clamp(0.5, 200.0);
+          dabPaint.color = baseColor.withValues(alpha: stroke.opacity * 0.7);
+          canvas.drawCircle(p.offset, w * 0.5, dabPaint);
+          // Grain
+          final rnd = math.Random(
+              p.offset.dx.toInt() * 73856093 ^ p.offset.dy.toInt() * 19349663);
+          final grains = (w / 2).round().clamp(6, 18);
+          for (int i = 0; i < grains; i++) {
+            final ang = rnd.nextDouble() * 2 * math.pi;
+            final dist = rnd.nextDouble() * w * 0.5;
+            final gSize = rnd.nextDouble() * 1.3 + 0.4;
+            final gOff = Offset(math.cos(ang) * dist, math.sin(ang) * dist);
+            final gColor = baseColor.withValues(
+                alpha: stroke.opacity * (0.12 + rnd.nextDouble() * 0.25));
+            canvas.drawCircle(p.offset + gOff, gSize, dabPaint..color = gColor);
+          }
+        }
+        break;
+      case BrushMode.watercolor:
+        // Watercolor: multiple soft, translucent layers with blur
+        if (stroke.points.length == 1) {
+          final p = points.first;
+          final w = (stroke.width * p.pressure).clamp(0.5, 200.0);
+          final spotPaint = Paint()
+            ..color = paint.color.withValues(alpha: stroke.opacity * 0.25)
+            ..style = PaintingStyle.fill
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0);
+          canvas.drawCircle(p.offset, w * 0.6, spotPaint);
+          break;
+        }
+        final path =
+            _createCatmullRomPath(stroke.points, closed: false, alpha: 0.5);
+        final layers = [
+          {"widthFactor": 1.3, "alpha": 0.18, "blur": 3.0},
+          {"widthFactor": 1.0, "alpha": 0.26, "blur": 2.0},
+          {"widthFactor": 0.8, "alpha": 0.35, "blur": 1.0},
+        ];
+        for (final layer in layers) {
+          final layerPaint = Paint()
+            ..color = paint.color
+                .withValues(alpha: stroke.opacity * (layer["alpha"] as double))
+            ..style = PaintingStyle.stroke
+            ..strokeCap = StrokeCap.round
+            ..strokeJoin = StrokeJoin.round
+            ..isAntiAlias = true
+            ..maskFilter =
+                MaskFilter.blur(BlurStyle.normal, layer["blur"] as double)
+            ..strokeWidth = stroke.width * (layer["widthFactor"] as double);
+          canvas.drawPath(path, layerPaint);
+        }
+        // Optional: subtle bleed at the end point
+        final end = stroke.points.last.offset;
+        final bleedPaint = Paint()
+          ..color = paint.color.withValues(alpha: stroke.opacity * 0.12)
+          ..style = PaintingStyle.fill
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0);
+        canvas.drawCircle(end, stroke.width * 0.6, bleedPaint);
+        break;
+      case BrushMode.oilPaint:
+        // Oil paint: impasto-like layered stroke with subtle highlight
+        {
+          final path =
+              _createCatmullRomPath(stroke.points, closed: false, alpha: 0.5);
+          final baseColor = paint.color;
 
-      final width1 = stroke.width * point1.pressure;
-      final width2 = stroke.width * point2.pressure;
+          // Underpaint: slightly darker, wider, soft
+          final under = Paint()
+            ..color = baseColor.withValues(
+                alpha: (stroke.opacity * 0.22).clamp(0.0, 1.0))
+            ..style = PaintingStyle.stroke
+            ..strokeCap = StrokeCap.round
+            ..strokeJoin = StrokeJoin.round
+            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5)
+            ..strokeWidth = stroke.width * 1.35;
+          canvas.drawPath(path, under);
 
-      // Create brush bristle effect
-      final bristleCount = (stroke.width / 3).round().clamp(3, 10);
-      for (int bristle = 0; bristle < bristleCount; bristle++) {
-        final offset = (bristle - bristleCount / 2) * 0.5;
+          // Body paint: main opaque body with slight texture variation
+          final body = Paint()
+            ..color =
+                baseColor.withValues(alpha: stroke.opacity.clamp(0.0, 1.0))
+            ..style = PaintingStyle.stroke
+            ..strokeCap = StrokeCap.round
+            ..strokeJoin = StrokeJoin.round
+            ..strokeWidth = stroke.width;
+          canvas.drawPath(path, body);
 
-        final perpendicular = _getPerpendicular(point1.offset, point2.offset);
-        final bristleOffset = perpendicular * offset;
+          // Ridge highlight: lighter sheen along one side based on tangent
+          final highlight = Paint()
+            ..color = Colors.white.withValues(alpha: (stroke.opacity * 0.18))
+            ..style = PaintingStyle.stroke
+            ..strokeCap = StrokeCap.round
+            ..strokeJoin = StrokeJoin.round
+            ..strokeWidth = math.max(1.0, stroke.width * 0.35)
+            ..blendMode = BlendMode.screen;
 
-        final bristleStart = point1.offset + bristleOffset;
-        final bristleEnd = point2.offset + bristleOffset;
+          // Approximate highlight by stroking a slightly offset path
+          final hlPath = Path();
+          if (points.isNotEmpty) {
+            hlPath.moveTo(points.first.offset.dx, points.first.offset.dy);
+            for (int i = 0; i < points.length - 1; i++) {
+              final a = points[i].offset;
+              final b = points[i + 1].offset;
+              final perp = _getPerpendicular(a, b);
+              final offsetAmt = math.max(0.6, stroke.width * 0.15);
+              final a2 = a + perp * offsetAmt;
+              final b2 = b + perp * offsetAmt;
+              hlPath.lineTo(b2.dx, b2.dy);
+              if (i == 0) {
+                hlPath.moveTo(a2.dx, a2.dy);
+              }
+            }
+          }
+          canvas.drawPath(hlPath, highlight);
 
-        final bristleWidth =
-            ((width1 + width2) / 2) * (0.7 + 0.3 * (bristle % 2));
+          // Occasional thick daubs along the path to simulate impasto
+          final rnd = math.Random(1337);
+          for (int i = 0; i < points.length; i += 6) {
+            final p = points[i];
+            final w = (stroke.width * p.pressure).clamp(0.8, 200.0);
+            final daub = Paint()
+              ..color = baseColor.withValues(alpha: (stroke.opacity * 0.35))
+              ..style = PaintingStyle.fill;
+            final rx = w * (0.45 + rnd.nextDouble() * 0.25);
+            final ry = w * (0.25 + rnd.nextDouble() * 0.2);
+            final ang = rnd.nextDouble() * math.pi;
+            canvas.save();
+            canvas.translate(p.offset.dx, p.offset.dy);
+            canvas.rotate(ang);
+            canvas.drawOval(
+                Rect.fromCenter(center: Offset.zero, width: rx, height: ry),
+                daub);
+            canvas.restore();
+          }
+        }
+        break;
+      case BrushMode.airbrush:
+        // Airbrush: soft spray particles with a faint core
+        {
+          final baseColor = paint.color;
+          final rnd = math.Random(9029);
+          // Draw a faint core to guide stroke shape
+          for (int i = 0; i < points.length - 1; i++) {
+            final a = points[i];
+            final b = points[i + 1];
+            final corePaint = Paint()
+              ..color = baseColor.withValues(alpha: stroke.opacity * 0.15)
+              ..style = PaintingStyle.stroke
+              ..strokeCap = StrokeCap.round
+              ..isAntiAlias = true
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.5)
+              ..strokeWidth = math.max(
+                  0.5, (a.pressure + b.pressure) * 0.5 * stroke.width * 0.4);
+            canvas.drawLine(a.offset, b.offset, corePaint);
+          }
 
-        canvas.drawLine(
-          bristleStart,
-          bristleEnd,
-          paint
-            ..strokeWidth = bristleWidth / bristleCount
-            ..color = paint.color.withOpacity(
-              paint.color.opacity * (0.8 + 0.2 * math.sin(bristle.toDouble())),
-            ),
-        );
-      }
+          // Spray particles around each segment
+          for (int i = 0; i < points.length - 1; i++) {
+            final a = points[i];
+            final b = points[i + 1];
+            final seg = b.offset - a.offset;
+            final len = seg.distance;
+            if (len <= 0) continue;
+            // Particle budget scales with stroke length and size
+            final baseCount =
+                (len * 0.6 + stroke.width * 1.5).clamp(6, 80).toInt();
+            for (int k = 0; k < baseCount; k++) {
+              final t = rnd.nextDouble();
+              final p = Offset.lerp(a.offset, b.offset, t)!;
+              // Radius depends on stroke width and pressure
+              final pr = a.pressure * (1 - t) + b.pressure * t;
+              final radius =
+                  (stroke.width * (0.15 + rnd.nextDouble() * 0.35) * pr)
+                      .clamp(0.4, 6.0);
+              // Scatter perpendicular with Gaussian-ish distribution
+              final perp = _getPerpendicular(a.offset, b.offset);
+              final spread = stroke.width * (0.6 + rnd.nextDouble() * 0.8);
+              final jitter = (rnd.nextDouble() - 0.5) +
+                  (rnd.nextDouble() - 0.5); // ~triangular
+              final offset = perp * (jitter * spread);
+              final drop = Paint()
+                ..color = baseColor.withValues(
+                    alpha: stroke.opacity * (0.05 + rnd.nextDouble() * 0.22))
+                ..style = PaintingStyle.fill
+                ..isAntiAlias = true
+                ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.8);
+              canvas.drawCircle(p + offset, radius, drop);
+            }
+          }
+        }
+        break;
+      case BrushMode.calligraphy:
+        // Calligraphy: flat nib with fixed angle causing thick/thin variation
+        {
+          final baseColor = paint.color;
+          final nibAngleDeg = 40.0; // classic nib angle
+          final nibAngle = nibAngleDeg * math.pi / 180.0;
+          final nibDir = Offset(math.cos(nibAngle), math.sin(nibAngle));
+          for (int i = 0; i < points.length - 1; i++) {
+            final a = points[i];
+            final b = points[i + 1];
+            final seg = b.offset - a.offset;
+            final len = seg.distance;
+            if (len <= 0.0001) continue;
+            final t = seg / len; // unit tangent
+            // Thickness follows |sin(theta)| between stroke and nib direction
+            final cross = (t.dx * nibDir.dy - t.dy * nibDir.dx).abs();
+            final pressure = (a.pressure + b.pressure) * 0.5;
+            final thickness = math.max(
+              0.6,
+              stroke.width * (0.35 + 0.9 * cross) * pressure,
+            );
+            final core = Paint()
+              ..color = baseColor.withValues(alpha: stroke.opacity)
+              ..style = PaintingStyle.stroke
+              ..strokeCap = StrokeCap.butt
+              ..strokeJoin = StrokeJoin.round
+              ..isAntiAlias = true
+              ..strokeWidth = thickness;
+            canvas.drawLine(a.offset, b.offset, core);
+            // Soft edge pass to slightly feather the ribbon
+            final edge = Paint()
+              ..color = baseColor.withValues(alpha: stroke.opacity * 0.25)
+              ..style = PaintingStyle.stroke
+              ..strokeCap = StrokeCap.butt
+              ..strokeJoin = StrokeJoin.round
+              ..isAntiAlias = true
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.6)
+              ..strokeWidth = thickness * 1.1;
+            canvas.drawLine(a.offset, b.offset, edge);
+          }
+        }
+        break;
+      case BrushMode.pastel:
+        // Pastel: chalky, layered dabs with grain
+        {
+          final baseColor = paint.color;
+          final rnd = math.Random(2718);
+          for (final p in points) {
+            final w = (stroke.width * p.pressure).clamp(0.5, 220.0);
+            // Base smudge
+            final base = Paint()
+              ..color = baseColor.withValues(alpha: stroke.opacity * 0.35)
+              ..style = PaintingStyle.fill
+              ..isAntiAlias = true
+              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.8);
+            canvas.drawCircle(p.offset, w * 0.55, base);
+
+            // Chalk body
+            final body = Paint()
+              ..color = baseColor.withValues(alpha: stroke.opacity * 0.55)
+              ..style = PaintingStyle.fill
+              ..isAntiAlias = true;
+            canvas.drawCircle(p.offset, w * 0.42, body);
+
+            // Grain speckles around
+            final grains = (w * 0.8).round().clamp(8, 28);
+            for (int i = 0; i < grains; i++) {
+              final ang = rnd.nextDouble() * 2 * math.pi;
+              final dist = rnd.nextDouble() * w * 0.6;
+              final gSize = 0.6 + rnd.nextDouble() * 1.4;
+              final gOff = Offset(math.cos(ang) * dist, math.sin(ang) * dist);
+              final alpha = stroke.opacity * (0.06 + rnd.nextDouble() * 0.24);
+              final speck = Paint()
+                ..color = baseColor.withValues(alpha: alpha)
+                ..style = PaintingStyle.fill
+                ..isAntiAlias = true;
+              canvas.drawCircle(p.offset + gOff, gSize, speck);
+            }
+          }
+        }
+        break;
     }
   }
+
+  // Insert intermediate points along segments longer than maxSegmentLen (pixels)
+  List<DrawingPoint> _interpolatePoints(List<DrawingPoint> pts,
+      {double maxSegmentLen = 4.0}) {
+    if (pts.length < 2) return pts;
+    final out = <DrawingPoint>[];
+    out.add(pts.first);
+    for (int i = 0; i < pts.length - 1; i++) {
+      final a = pts[i];
+      final b = pts[i + 1];
+      final distance = (b.offset - a.offset).distance;
+      if (distance <= maxSegmentLen) {
+        out.add(b);
+        continue;
+      }
+      final steps = (distance / maxSegmentLen).ceil();
+      for (int s = 1; s <= steps; s++) {
+        final t = s / steps;
+        final o = Offset.lerp(a.offset, b.offset, t)!;
+        final p = _lerpDouble(a.pressure, b.pressure, t);
+        final ts = _lerpDouble(a.timestamp, b.timestamp, t);
+        out.add(DrawingPoint(offset: o, pressure: p, timestamp: ts));
+      }
+    }
+    return out;
+  }
+
+  double _lerpDouble(double a, double b, double t) => a + (b - a) * t;
 
   Offset _getPerpendicular(Offset start, Offset end) {
     final direction = end - start;

@@ -100,6 +100,7 @@ class SketchScreen extends StatelessWidget {
     );
   }
 
+  // ignore: unused_element
   void _handleMenuSelection(String value, SketchController controller) {
     switch (value) {
       case 'export':
@@ -111,6 +112,7 @@ class SketchScreen extends StatelessWidget {
     }
   }
 
+  // ignore: unused_element
   void _exportDrawing(SketchController controller) {
     if (controller.strokes.isEmpty) {
       Get.snackbar(
@@ -145,6 +147,7 @@ class SketchScreen extends StatelessWidget {
     });
   }
 
+  // ignore: unused_element
   void _showSettings() {
     Get.bottomSheet(
       Container(

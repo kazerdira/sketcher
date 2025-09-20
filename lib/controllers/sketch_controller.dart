@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import '../models/stroke.dart';
 import '../models/drawing_tool.dart';
+import '../models/brush_mode.dart';
 
 class SketchController extends GetxController {
   SketchController() {
@@ -14,6 +15,7 @@ class SketchController extends GetxController {
   final currentColor = Colors.black.obs;
   final brushSize = 5.0.obs;
   final toolOpacity = 1.0.obs;
+  final currentBrushMode = Rx<BrushMode?>(null);
   final backgroundImage = Rx<ImageProvider?>(null);
   final imageOpacity = 0.5.obs;
   final isImageVisible = true.obs;
@@ -89,6 +91,14 @@ class SketchController extends GetxController {
       currentColor.value = _toolColors[tool] ?? currentColor.value;
     }
 
+    update();
+  }
+
+  void setBrushMode(BrushMode? mode) {
+    currentBrushMode.value = mode;
+    if (_currentPoints.isNotEmpty) {
+      _updateCurrentStroke();
+    }
     update();
   }
 
@@ -182,6 +192,9 @@ class SketchController extends GetxController {
       opacity: toolOpacity.value,
       blendMode: config.blendMode,
       isEraser: currentTool.value == DrawingTool.eraser,
+      brushMode: currentTool.value == DrawingTool.brush
+          ? currentBrushMode.value
+          : null,
     );
 
     strokes.add(finalStroke);
@@ -203,6 +216,9 @@ class SketchController extends GetxController {
       opacity: toolOpacity.value,
       blendMode: config.blendMode,
       isEraser: currentTool.value == DrawingTool.eraser,
+      brushMode: currentTool.value == DrawingTool.brush
+          ? currentBrushMode.value
+          : null,
     );
   }
 

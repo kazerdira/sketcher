@@ -11,6 +11,7 @@ import '../controllers/sketch_controller.dart';
 import '../painters/sketch_painter.dart';
 import '../models/drawing_tool.dart';
 import '../models/stroke.dart';
+import '../models/brush_mode.dart';
 
 class DrawingCanvas extends StatefulWidget {
   const DrawingCanvas({Key? key}) : super(key: key);
@@ -146,6 +147,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                                 imageOpacity: controller.imageOpacity.value,
                                 isImageVisible: controller.isImageVisible.value,
                                 backgroundImageData: _backgroundImageData,
+                                viewport: _computeSceneViewport(constraints),
                               ),
                               child: const SizedBox.expand(),
                             ),
@@ -211,6 +213,28 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     }
   }
 
+  Rect _computeSceneViewport(BoxConstraints constraints) {
+    final size = Size(constraints.maxWidth, constraints.maxHeight);
+    final inverse = controller.transformationController.value.clone()..invert();
+    final corners = <Offset>[
+      Offset.zero,
+      Offset(size.width, 0),
+      Offset(0, size.height),
+      Offset(size.width, size.height),
+    ].map((o) => MatrixUtils.transformPoint(inverse, o)).toList();
+    double minX = corners.first.dx;
+    double maxX = corners.first.dx;
+    double minY = corners.first.dy;
+    double maxY = corners.first.dy;
+    for (final c in corners) {
+      if (c.dx < minX) minX = c.dx;
+      if (c.dx > maxX) maxX = c.dx;
+      if (c.dy < minY) minY = c.dy;
+      if (c.dy > maxY) maxY = c.dy;
+    }
+    return Rect.fromLTRB(minX, minY, maxX, maxY).inflate(32); // padding
+  }
+
   // Interaction callbacks removed with InteractiveViewer
 
   // Pointer handlers migrated to GestureDetector callbacks
@@ -239,6 +263,10 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                       const SizedBox(width: 16),
                       // Color Picker Icon (Professional color palette access)
                       _buildColorPickerButton(controller),
+                      const SizedBox(width: 16),
+                      // Brush mode selector (shown only for Brush tool)
+                      if (controller.currentTool.value == DrawingTool.brush)
+                        _buildBrushModeSelector(controller),
                       const SizedBox(width: 16), // Extra space at the end
                     ],
                   ),
@@ -292,6 +320,93 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
             () => controller.setTool(DrawingTool.brush),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildBrushModeSelector(SketchController controller) {
+    final current = controller.currentBrushMode.value;
+    return Semantics(
+      label: 'Brush mode selector',
+      child: Container(
+        height: 40,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        decoration: BoxDecoration(
+          color: Colors.grey[100],
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: Colors.grey[300]!),
+        ),
+        child: Row(children: [
+          Tooltip(
+            message: 'Basic Brush',
+            child: ChoiceChip(
+              key: const Key('brush-mode-basic'),
+              label: const Text('Basic'),
+              selected: current == null,
+              onSelected: (_) => controller.setBrushMode(null),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Tooltip(
+            message: 'Charcoal Brush',
+            child: ChoiceChip(
+              key: const Key('brush-mode-charcoal'),
+              label: const Text('Charcoal'),
+              selected: current == BrushMode.charcoal,
+              onSelected: (_) => controller.setBrushMode(BrushMode.charcoal),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Tooltip(
+            message: 'Watercolor Brush',
+            child: ChoiceChip(
+              key: const Key('brush-mode-watercolor'),
+              label: const Text('Watercolor'),
+              selected: current == BrushMode.watercolor,
+              onSelected: (_) => controller.setBrushMode(BrushMode.watercolor),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Tooltip(
+            message: 'Airbrush',
+            child: ChoiceChip(
+              key: const Key('brush-mode-airbrush'),
+              label: const Text('Airbrush'),
+              selected: current == BrushMode.airbrush,
+              onSelected: (_) => controller.setBrushMode(BrushMode.airbrush),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Tooltip(
+            message: 'Calligraphy Brush',
+            child: ChoiceChip(
+              key: const Key('brush-mode-calligraphy'),
+              label: const Text('Calligraphy'),
+              selected: current == BrushMode.calligraphy,
+              onSelected: (_) => controller.setBrushMode(BrushMode.calligraphy),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Tooltip(
+            message: 'Pastel Brush',
+            child: ChoiceChip(
+              key: const Key('brush-mode-pastel'),
+              label: const Text('Pastel'),
+              selected: current == BrushMode.pastel,
+              onSelected: (_) => controller.setBrushMode(BrushMode.pastel),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Tooltip(
+            message: 'Oil Paint Brush',
+            child: ChoiceChip(
+              key: const Key('brush-mode-oil'),
+              label: const Text('Oil'),
+              selected: current == BrushMode.oilPaint,
+              onSelected: (_) => controller.setBrushMode(BrushMode.oilPaint),
+            ),
+          ),
+        ]),
       ),
     );
   }

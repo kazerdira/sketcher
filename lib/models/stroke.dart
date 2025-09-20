@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'drawing_tool.dart';
+import 'brush_mode.dart';
 
 class DrawingPoint {
   final Offset offset;
@@ -21,6 +22,7 @@ class Stroke {
   final double opacity;
   final BlendMode blendMode;
   final bool isEraser;
+  final BrushMode? brushMode;
 
   Stroke({
     required this.points,
@@ -30,6 +32,7 @@ class Stroke {
     this.opacity = 1.0,
     this.blendMode = BlendMode.srcOver,
     this.isEraser = false,
+    this.brushMode,
   });
 
   Stroke copyWith({
@@ -40,6 +43,7 @@ class Stroke {
     double? opacity,
     BlendMode? blendMode,
     bool? isEraser,
+    BrushMode? brushMode,
   }) {
     return Stroke(
       points: points ?? this.points,
@@ -49,6 +53,7 @@ class Stroke {
       opacity: opacity ?? this.opacity,
       blendMode: blendMode ?? this.blendMode,
       isEraser: isEraser ?? this.isEraser,
+      brushMode: brushMode ?? this.brushMode,
     );
   }
 }
