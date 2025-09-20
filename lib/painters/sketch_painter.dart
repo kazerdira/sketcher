@@ -818,6 +818,13 @@ class SketchPainter extends CustomPainter {
 
     final old = oldDelegate;
 
+    // Fast checks first - most common cases
+    // Repaint when current stroke changes (for live drawing)
+    if (!identical(old.currentStroke, currentStroke)) {
+      print('🎨 REPAINT: Current stroke changed - repaint TRUE');
+      return true;
+    }
+
     // Repaint when stroke count changes (especially for undo)
     if (old.strokes.length != strokes.length) {
       print(
@@ -825,27 +832,14 @@ class SketchPainter extends CustomPainter {
       return true;
     }
 
-    // Check if strokes list reference changed (after refresh)
+    // Efficient reference check - if list reference changed, we need to repaint
+    // This avoids expensive per-stroke comparisons
     if (!identical(old.strokes, strokes)) {
       print('🎨 REPAINT: Strokes list reference changed - repaint TRUE');
       return true;
     }
 
-    // Repaint when stroke contents change (even if list identity is the same)
-    for (int i = 0; i < strokes.length; i++) {
-      if (!identical(old.strokes[i], strokes[i])) {
-        print('🎨 REPAINT: Stroke $i changed - repaint TRUE');
-        return true;
-      }
-    }
-
-    // Repaint when current stroke changes (for live drawing)
-    if (!identical(old.currentStroke, currentStroke)) {
-      print('🎨 REPAINT: Current stroke changed - repaint TRUE');
-      return true;
-    }
-
-    // Repaint when background properties change
+    // Background property checks
     if (old.backgroundImage != backgroundImage) {
       print('🎨 REPAINT: Background image changed - repaint TRUE');
       return true;
@@ -865,6 +859,7 @@ class SketchPainter extends CustomPainter {
       return true;
     }
 
+    // If we reach here, no changes detected
     print('🎨 REPAINT: No changes detected - repaint FALSE');
     return false;
   }
