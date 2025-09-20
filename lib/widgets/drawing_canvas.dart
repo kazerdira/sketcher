@@ -48,7 +48,14 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                   final newCount = (_pointerCount + 1).clamp(0, 10);
                   final scenePos = controller.transformationController
                       .toScene(event.localPosition);
-                  if (newCount == 1) {
+                  final isStylus = event.kind == ui.PointerDeviceKind.stylus ||
+                      event.kind == ui.PointerDeviceKind.invertedStylus;
+                  final isMouse = event.kind == ui.PointerDeviceKind.mouse;
+                  final inputAllowed = !controller.stylusOnlyMode.value
+                      ? true
+                      : (isStylus || isMouse);
+
+                  if (newCount == 1 && inputAllowed) {
                     // Defer starting stroke until we see movement or a tap completes.
                     _downPos = scenePos;
                     _pendingTap = true;
@@ -66,7 +73,13 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                   setState(() {});
                 },
                 onPointerMove: (event) {
-                  if (_pointerCount == 1) {
+                  final isStylus = event.kind == ui.PointerDeviceKind.stylus ||
+                      event.kind == ui.PointerDeviceKind.invertedStylus;
+                  final isMouse = event.kind == ui.PointerDeviceKind.mouse;
+                  final inputAllowed = !controller.stylusOnlyMode.value
+                      ? true
+                      : (isStylus || isMouse);
+                  if (_pointerCount == 1 && inputAllowed) {
                     final scenePos = controller.transformationController
                         .toScene(event.localPosition);
                     if (!_isDrawing && _pendingTap && _downPos != null) {
@@ -89,7 +102,13 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                 onPointerUp: (event) {
                   // ignore: avoid_print
                   print('👇 pointer up');
-                  if (_pointerCount == 1) {
+                  final isStylus = event.kind == ui.PointerDeviceKind.stylus ||
+                      event.kind == ui.PointerDeviceKind.invertedStylus;
+                  final isMouse = event.kind == ui.PointerDeviceKind.mouse;
+                  final inputAllowed = !controller.stylusOnlyMode.value
+                      ? true
+                      : (isStylus || isMouse);
+                  if (_pointerCount == 1 && inputAllowed) {
                     if (_isDrawing) {
                       _isDrawing = false;
                       controller.endStroke();
@@ -1285,6 +1304,8 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                           ],
                           const SizedBox(height: 32),
                           _buildColorSection(controller),
+                          const SizedBox(height: 24),
+                          _buildInputSection(controller),
                           const SizedBox(height: 32),
                           _buildActionSection(controller),
                         ],
@@ -1609,6 +1630,43 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
             ],
           ),
         ],
+      ],
+    );
+  }
+
+  Widget _buildInputSection(SketchController controller) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.gesture, size: 20, color: Colors.grey[600]),
+            const SizedBox(width: 8),
+            const Text(
+              'Input',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Container(
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.grey[300]!),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: SwitchListTile.adaptive(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+            title: const Text('Stylus-only (Palm rejection)'),
+            subtitle: const Text(
+                'Ignore finger touches for drawing; still allow two-finger pan/zoom.'),
+            value: controller.stylusOnlyMode.value,
+            onChanged: controller.setStylusOnlyMode,
+            secondary: const Icon(Icons.edit),
+          ),
+        ),
       ],
     );
   }

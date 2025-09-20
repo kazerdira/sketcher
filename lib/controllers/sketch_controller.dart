@@ -16,6 +16,8 @@ class SketchController extends GetxController {
   final brushSize = 5.0.obs;
   final toolOpacity = 1.0.obs;
   final currentBrushMode = Rx<BrushMode?>(null);
+  // Input settings
+  final stylusOnlyMode = false.obs; // Palm rejection: ignore touch for drawing
   // Brush tuning state
   final calligraphyNibAngleDeg = 40.0.obs; // 0–90
   final calligraphyNibWidthFactor = 1.0.obs; // ~0.4–1.8
@@ -103,6 +105,11 @@ class SketchController extends GetxController {
     if (_currentPoints.isNotEmpty) {
       _updateCurrentStroke();
     }
+    update();
+  }
+
+  void setStylusOnlyMode(bool enabled) {
+    stylusOnlyMode.value = enabled;
     update();
   }
 
