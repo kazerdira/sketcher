@@ -6,6 +6,7 @@ import 'package:flutter/rendering.dart';
 import 'package:get/get.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+// Syncfusion imports removed after reverting to Material Slider for tests
 import '../controllers/sketch_controller.dart';
 import '../painters/sketch_painter.dart';
 import '../models/drawing_tool.dart';
@@ -29,6 +30,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   Offset? _downPos;
   bool _pendingTap = false;
   static const double _touchSlop = 8.0;
+  bool _controlsExpanded = true;
 
   @override
   Widget build(BuildContext context) {
@@ -237,9 +239,6 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                       const SizedBox(width: 16),
                       // Color Picker Icon (Professional color palette access)
                       _buildColorPickerButton(controller),
-                      const SizedBox(width: 16),
-                      // Action Buttons
-                      _buildCompactActionButtons(controller),
                       const SizedBox(width: 16), // Extra space at the end
                     ],
                   ),
@@ -366,37 +365,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     );
   }
 
-  // Compact action buttons
-  Widget _buildCompactActionButtons(SketchController controller) {
-    return Row(
-      mainAxisSize: MainAxisSize.min, // Use minimum space needed
-      children: [
-        _buildModernActionButton(
-          Icons.undo,
-          'Undo',
-          true,
-          controller.undo,
-          key: const Key('undo-button'),
-        ),
-        const SizedBox(width: 6), // Reduced spacing
-        _buildModernActionButton(
-          Icons.clear,
-          'Clear',
-          true,
-          controller.clear,
-          key: const Key('clear-button'),
-        ),
-        const SizedBox(width: 6), // Reduced spacing
-        _buildModernActionButton(
-          Icons.settings,
-          'Settings',
-          true,
-          () => _showAdvancedSettings(),
-          key: const Key('settings-button'),
-        ),
-      ],
-    );
-  }
+  // Compact action buttons removed; actions moved to bottom inline controls.
 
   Widget _buildInlineControls() {
     return GetBuilder<SketchController>(builder: (controller) {
@@ -426,79 +395,138 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                       const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   child: Material(
                     type: MaterialType.transparency,
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.center,
-                        children: [
-                          if (controller.backgroundImage.value != null) ...[
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Top row: arrow toggle + quick actions
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
                             _glassIconButton(
-                              icon: Icons.close,
-                              tooltip: 'Remove Image',
-                              key: const Key('remove-background-button'),
-                              color: Colors.red,
-                              onTap: () {
-                                setState(() {
-                                  _backgroundImageData = null;
-                                });
-                                controller.setBackgroundImage(null);
-                                controller.isImageVisible.value = false;
-                                controller.update();
-                              },
+                              icon: _controlsExpanded
+                                  ? Icons.keyboard_arrow_down
+                                  : Icons.keyboard_arrow_up,
+                              tooltip: _controlsExpanded
+                                  ? 'Hide Sliders'
+                                  : 'Show Sliders',
+                              onTap: () => setState(
+                                  () => _controlsExpanded = !_controlsExpanded),
+                              key: const Key('toggle-sliders-button'),
                             ),
-                            _divider(),
+                            const SizedBox(width: 12),
+                            // Image and editing action buttons grouped together
+                            if (controller.backgroundImage.value != null) ...[
+                              _glassIconButton(
+                                icon: Icons.close,
+                                tooltip: 'Remove Image',
+                                key: const Key('remove-background-button'),
+                                color: Colors.red,
+                                onTap: () {
+                                  setState(() {
+                                    _backgroundImageData = null;
+                                  });
+                                  controller.setBackgroundImage(null);
+                                  controller.isImageVisible.value = false;
+                                  controller.update();
+                                },
+                              ),
+                              _divider(),
+                            ],
+                            _glassIconButton(
+                              icon: Icons.image,
+                              tooltip: 'Background',
+                              onTap: _showImagePicker,
+                            ),
+                            const SizedBox(width: 12),
+                            _glassIconButton(
+                              icon: Icons.undo,
+                              tooltip: 'Undo',
+                              onTap: controller.undo,
+                              key: const Key('undo-button'),
+                            ),
+                            const SizedBox(width: 8),
+                            _glassIconButton(
+                              icon: Icons.clear,
+                              tooltip: 'Clear',
+                              onTap: controller.clear,
+                              key: const Key('clear-button'),
+                            ),
+                            const SizedBox(width: 8),
+                            _glassIconButton(
+                              icon: Icons.settings,
+                              tooltip: 'Settings',
+                              onTap: _showAdvancedSettings,
+                              key: const Key('settings-button'),
+                            ),
+                            const Spacer(),
                           ],
-                          SizedBox(
-                            width: 220,
-                            child: ProSlider(
-                              label: 'Brush Size',
-                              value: controller.brushSize.value,
-                              min: 1.0,
-                              max: 50.0,
-                              icon: Icons.brush,
-                              compact: true,
-                              sliderKey: const Key('brush-size-slider'),
-                              onChanged: (v) => controller.setBrushSize(v),
-                            ),
-                          ),
-                          _divider(),
-                          SizedBox(
-                            width: 220,
-                            child: ProSlider(
-                              label: 'Stroke Opacity',
-                              value: controller.toolOpacity.value,
-                              min: 0.0,
-                              max: 1.0,
-                              icon: Icons.opacity,
-                              compact: true,
-                              sliderKey: const Key('stroke-opacity-slider'),
-                              onChanged: (v) => controller.setOpacity(v),
-                            ),
-                          ),
-                          if (controller.backgroundImage.value != null) ...[
-                            _divider(),
-                            SizedBox(
-                              width: 220,
-                              child: ProSlider(
-                                label: 'Image Opacity',
-                                value: controller.imageOpacity.value,
-                                min: 0.0,
-                                max: 1.0,
-                                icon: Icons.image,
-                                compact: true,
-                                sliderKey: const Key('image-opacity-slider'),
-                                onChanged: (v) => controller.setImageOpacity(v),
+                        ),
+                        // Collapsible sliders area (vertical with Syncfusion)
+                        AnimatedSize(
+                          duration: const Duration(milliseconds: 220),
+                          curve: Curves.easeInOut,
+                          child: ClipRect(
+                            child: Align(
+                              alignment: Alignment.topCenter,
+                              heightFactor: _controlsExpanded ? 1.0 : 0.0,
+                              child: Padding(
+                                padding: const EdgeInsets.only(top: 10),
+                                child: ConstrainedBox(
+                                  constraints:
+                                      const BoxConstraints(maxWidth: 280),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.stretch,
+                                    children: [
+                                      ProSlider(
+                                        label: 'Brush Size',
+                                        value: controller.brushSize.value,
+                                        min: 1.0,
+                                        max: 50.0,
+                                        onChanged: (v) =>
+                                            controller.setBrushSize(v),
+                                        icon: Icons.brush,
+                                        sliderKey:
+                                            const Key('brush-size-slider'),
+                                      ),
+                                      const SizedBox(height: 12),
+                                      ProSlider(
+                                        label: 'Stroke Opacity',
+                                        value: controller.toolOpacity.value,
+                                        min: 0.0,
+                                        max: 1.0,
+                                        onChanged: (v) =>
+                                            controller.setOpacity(v),
+                                        icon: Icons.opacity,
+                                        sliderKey:
+                                            const Key('stroke-opacity-slider'),
+                                      ),
+                                      if (controller.backgroundImage.value !=
+                                          null) ...[
+                                        const SizedBox(height: 12),
+                                        ProSlider(
+                                          label: 'Image Opacity',
+                                          value: controller.imageOpacity.value,
+                                          min: 0.0,
+                                          max: 1.0,
+                                          onChanged: (v) =>
+                                              controller.setImageOpacity(v),
+                                          icon: Icons.image,
+                                          sliderKey:
+                                              const Key('image-opacity-slider'),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                ),
                               ),
                             ),
-                          ],
-                          _divider(),
-                          _glassIconButton(
-                            icon: Icons.image,
-                            tooltip: 'Background',
-                            onTap: _showImagePicker,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
@@ -554,32 +582,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     );
   }
 
-  Widget _buildModernActionButton(
-      IconData icon, String tooltip, bool enabled, VoidCallback? onTap,
-      {Key? key}) {
-    return Container(
-      key: key,
-      width: 36, // Slightly smaller for better fit
-      height: 36,
-      decoration: BoxDecoration(
-        color: enabled ? Colors.grey[100] : Colors.grey[50],
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: Colors.grey[300]!,
-          width: 1,
-        ),
-      ),
-      child: InkWell(
-        onTap: enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(18),
-        child: Icon(
-          icon,
-          size: 18, // Slightly smaller icon
-          color: enabled ? Colors.grey[700] : Colors.grey[400],
-        ),
-      ),
-    );
-  }
+  // _buildModernActionButton removed; using _glassIconButton in bottom bar.
 
   void _showColorPicker() {
     final controller = Get.find<SketchController>();
@@ -1090,7 +1093,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                             50.0,
                             (value) => controller.setBrushSize(value),
                             Icons.brush,
-                            sliderKey: const Key('brush-size-slider'),
+                            sliderKey: const Key('brush-size-slider-modal'),
                           ),
                           const SizedBox(height: 24),
                           _buildModernSlider(
@@ -1100,7 +1103,7 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                             1.0,
                             (value) => controller.setOpacity(value),
                             Icons.opacity,
-                            sliderKey: const Key('stroke-opacity-slider'),
+                            sliderKey: const Key('stroke-opacity-slider-modal'),
                           ),
                           if (controller.backgroundImage.value != null) ...[
                             const SizedBox(height: 24),
@@ -1111,7 +1114,8 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
                               1.0,
                               (value) => controller.setImageOpacity(value),
                               Icons.image,
-                              sliderKey: const Key('image-opacity-slider'),
+                              sliderKey:
+                                  const Key('image-opacity-slider-modal'),
                             ),
                           ],
                           const SizedBox(height: 32),
@@ -1754,3 +1758,6 @@ class ProGradientTrackShape extends RoundedRectSliderTrackShape {
     canvas.restore();
   }
 }
+
+// Labeled wrapper for Syncfusion slider with icon, title, and value chip
+// _SfLabeledSlider removed; using ProSlider-based labeled sliders.

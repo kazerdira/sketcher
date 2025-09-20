@@ -15,6 +15,10 @@ dependencies:
   # State Management
   get: ^4.6.6
   
+  # UI Components
+  syncfusion_flutter_sliders: ^28.2.3
+  syncfusion_flutter_core: ^28.2.3
+  
   # Image Handling
   image_picker: ^1.0.4
   image: ^4.1.3
