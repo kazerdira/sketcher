@@ -379,13 +379,15 @@ class SketchPainter extends CustomPainter {
     // If an advanced brush mode is selected, render accordingly
     switch (stroke.brushMode) {
       case null:
-        // Default textured bristle lines
+        // Phase 3: Optimized default brush with reduced bristle count
         for (int i = 0; i < points.length - 1; i++) {
           final point1 = points[i];
           final point2 = points[i + 1];
           final width1 = stroke.width * point1.pressure;
           final width2 = stroke.width * point2.pressure;
-          final bristleCount = (stroke.width / 3).round().clamp(3, 10);
+          final bristleCount = (stroke.width / 4)
+              .round()
+              .clamp(2, 6); // Reduced from 3-10 to 2-6
           for (int bristle = 0; bristle < bristleCount; bristle++) {
             final offset = (bristle - bristleCount / 2) * 0.5;
             final perpendicular =
@@ -409,7 +411,7 @@ class SketchPainter extends CustomPainter {
         }
         break;
       case BrushMode.charcoal:
-        // Overlapping dabs with grainy texture
+        // Phase 3: Optimized charcoal with reduced particle count
         final baseColor = paint.color;
         final dabPaint = Paint()
           ..style = PaintingStyle.fill
@@ -418,10 +420,10 @@ class SketchPainter extends CustomPainter {
           final w = (stroke.width * p.pressure).clamp(0.5, 200.0);
           dabPaint.color = baseColor.withValues(alpha: stroke.opacity * 0.7);
           canvas.drawCircle(p.offset, w * 0.5, dabPaint);
-          // Grain
+          // Optimized grain: reduced from 6-18 to 3-8 particles
           final rnd = math.Random(
               p.offset.dx.toInt() * 73856093 ^ p.offset.dy.toInt() * 19349663);
-          final grains = (w / 2).round().clamp(6, 18);
+          final grains = (w / 4).round().clamp(3, 8); // Reduced particle count
           for (int i = 0; i < grains; i++) {
             final ang = rnd.nextDouble() * 2 * math.pi;
             final dist = rnd.nextDouble() * w * 0.5;
@@ -447,10 +449,10 @@ class SketchPainter extends CustomPainter {
         }
         final path =
             _createCatmullRomPath(stroke.points, closed: false, alpha: 0.5);
+        // Phase 3: Simplified watercolor with reduced layers (3 -> 2)
         final layers = [
-          {"widthFactor": 1.3, "alpha": 0.18, "blur": 3.0},
-          {"widthFactor": 1.0, "alpha": 0.26, "blur": 2.0},
-          {"widthFactor": 0.8, "alpha": 0.35, "blur": 1.0},
+          {"widthFactor": 1.2, "alpha": 0.22, "blur": 2.5},
+          {"widthFactor": 0.9, "alpha": 0.35, "blur": 1.0},
         ];
         for (final layer in layers) {
           final layerPaint = Paint()
