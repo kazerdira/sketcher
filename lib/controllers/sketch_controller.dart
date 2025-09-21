@@ -4,6 +4,7 @@ import '../models/stroke.dart';
 import '../models/drawing_tool.dart';
 import '../models/brush_mode.dart';
 import '../painters/sketch_painter.dart';
+import '../utils/memory_manager.dart'; // Phase 4: Memory Management
 
 class SketchController extends GetxController {
   SketchController() {
@@ -267,10 +268,8 @@ class SketchController extends GetxController {
       _currentStroke = null;
       _currentPoints = [];
 
-      // Phase 4: Periodic cache optimization every 20 strokes
-      if (strokes.length % 20 == 0) {
-        SketchPainter.optimizeCaches();
-      }
+      // Phase 4: Comprehensive Memory Management Integration
+      _handleMemoryManagement();
 
       _saveToHistory();
       update();
@@ -390,9 +389,10 @@ class SketchController extends GetxController {
     _currentPoints = [];
     _lastVelocity = 0.0;
 
-    // Phase 4: Clear all caches completely
+    // Phase 4: Comprehensive memory cleanup on clear
     SketchPainter.clearStrokeCache();
     SketchPainter.clearBoundsCache();
+    MemoryManager.emergencyMemoryCleanup();
 
     _saveToHistory();
     update();
@@ -435,5 +435,69 @@ class SketchController extends GetxController {
       return Colors.transparent;
     }
     return currentColor.value.withOpacity(toolOpacity.value);
+  }
+
+  // Phase 4: Memory Management Integration
+
+  /// Comprehensive memory management called after each stroke
+  void _handleMemoryManagement() {
+    try {
+      final strokeCount = strokes.length;
+
+      // Regular cleanup every 20 strokes
+      if (MemoryManager.shouldRunRegularCleanup(strokeCount)) {
+        SketchPainter.optimizeCaches();
+        debugPrint('🧠 Regular cleanup at $strokeCount strokes');
+      }
+
+      // Memory pressure check every 50 strokes
+      if (MemoryManager.shouldRunMemoryCheck(strokeCount)) {
+        MemoryManager.optimizeMemoryUsage(strokes);
+        debugPrint('🧠 Memory check at $strokeCount strokes');
+      }
+
+      // Automatic stroke limit management
+      final managedStrokes = MemoryManager.manageStrokeCount(strokes);
+      if (managedStrokes.length != strokes.length) {
+        strokes.clear();
+        strokes.addAll(managedStrokes);
+        debugPrint(
+            '🧠 Stroke count managed: ${strokeCount} → ${managedStrokes.length}');
+      }
+    } catch (e) {
+      debugPrint('❌ Memory management failed: $e');
+      // Don't show user notification for internal memory management failures
+    }
+  }
+
+  /// Manual memory cleanup for emergency situations
+  void performMemoryCleanup() {
+    try {
+      MemoryManager.handleMemoryPressure();
+      debugPrint('🧠 Manual memory cleanup performed');
+    } catch (e) {
+      debugPrint('❌ Manual memory cleanup failed: $e');
+    }
+  }
+
+  /// Check current memory usage status
+  void checkMemoryStatus() {
+    try {
+      final status = MemoryManager.getMemoryStatus(strokes);
+      debugPrint('🧠 Memory Status: $status');
+
+      // Show status to user if concerning
+      if (status.contains('High') || status.contains('Critical')) {
+        Get.snackbar(
+          'Memory Status',
+          status,
+          backgroundColor: Colors.orange,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 3),
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Memory status check failed: $e');
+    }
   }
 }
