@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
+import 'dart:async'; // Added for Completer and TimeoutException
 import 'package:flutter/services.dart';
 import 'package:flutter/rendering.dart';
 import 'package:get/get.dart';
@@ -32,6 +33,10 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   bool _pendingTap = false;
   static const double _touchSlop = 8.0;
   bool _controlsExpanded = true;
+
+  // Phase 2: Async image loading state
+  bool _isLoadingImage = false;
+  String? _imageLoadError;
 
   @override
   Widget build(BuildContext context) {
@@ -258,6 +263,102 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
     } else {
       controller = Get.put(SketchController());
     }
+
+    // Phase 2: Listen to background image changes and load asynchronously
+    ever(controller.backgroundImage, _handleImageChange);
+  }
+
+  // Phase 2: Async image loading methods
+  void _handleImageChange(ImageProvider? imageProvider) {
+    if (imageProvider == null) {
+      setState(() {
+        _backgroundImageData?.dispose(); // CRITICAL: Dispose old image
+        _backgroundImageData = null;
+        _imageLoadError = null;
+        _isLoadingImage = false;
+      });
+      return;
+    }
+    _loadImageAsync(imageProvider);
+  }
+
+  Future<void> _loadImageAsync(ImageProvider imageProvider) async {
+    if (_isLoadingImage) return; // Prevent concurrent loads
+
+    setState(() {
+      _isLoadingImage = true;
+      _imageLoadError = null;
+    });
+
+    try {
+      final completer = Completer<ui.Image>();
+      final ImageStream stream =
+          imageProvider.resolve(ImageConfiguration.empty);
+
+      late ImageStreamListener listener;
+      listener = ImageStreamListener(
+        (ImageInfo image, bool synchronousCall) {
+          stream.removeListener(listener);
+          if (!completer.isCompleted) {
+            completer.complete(image.image);
+          }
+        },
+        onError: (dynamic exception, StackTrace? stackTrace) {
+          stream.removeListener(listener);
+          if (!completer.isCompleted) {
+            completer.completeError(exception, stackTrace);
+          }
+        },
+      );
+
+      stream.addListener(listener);
+
+      // CRITICAL: Timeout for production stability
+      final image = await completer.future.timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => throw TimeoutException(
+            'Image load timeout', const Duration(seconds: 10)),
+      );
+
+      if (mounted) {
+        setState(() {
+          _backgroundImageData?.dispose(); // CRITICAL: Dispose old image
+          _backgroundImageData = image;
+          _isLoadingImage = false;
+        });
+
+        // Update image rect after successful load
+        final renderBox =
+            _repaintKey.currentContext?.findRenderObject() as RenderBox?;
+        if (renderBox != null) {
+          final rect = _computeAnchoredImageRect(renderBox.size, image);
+          controller.imageRect.value = rect;
+        }
+      }
+    } catch (e) {
+      debugPrint('Image load failed: $e');
+      if (mounted) {
+        setState(() {
+          _isLoadingImage = false;
+          _imageLoadError = e.toString();
+        });
+
+        Get.snackbar(
+          'Image Load Error',
+          'Failed to load background image: ${e.toString()}',
+          snackPosition: SnackPosition.BOTTOM,
+          backgroundColor: Colors.red,
+          colorText: Colors.white,
+          duration: const Duration(seconds: 3),
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _backgroundImageData?.dispose(); // CRITICAL: Clean up on disposal
+    super.dispose();
   }
 
   Rect _computeSceneViewport(BoxConstraints constraints) {
@@ -1799,22 +1900,11 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       if (picked == null) return;
 
       final bytes = await picked.readAsBytes();
-      final img = await _decodeUiImage(bytes);
 
-      setState(() {
-        _backgroundImageData = img;
-      });
-      // Use MemoryImage to avoid platform-specific file issues
+      // Phase 2: Use async image loading instead of direct setState
+      // The async loader will handle disposal and proper loading
       controller.setBackgroundImage(MemoryImage(bytes));
-      // Anchor image rect to current canvas size
-      final renderBox =
-          _repaintKey.currentContext?.findRenderObject() as RenderBox?;
-      if (renderBox != null) {
-        final rect = _computeAnchoredImageRect(renderBox.size, img);
-        controller.imageRect.value = rect;
-      }
       controller.isImageVisible.value = true;
-      controller.update();
     } catch (e) {
       Get.snackbar(
         'Image Error',
@@ -1833,20 +1923,11 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       if (picked == null) return;
 
       final bytes = await picked.readAsBytes();
-      final img = await _decodeUiImage(bytes);
 
-      setState(() {
-        _backgroundImageData = img;
-      });
+      // Phase 2: Use async image loading instead of direct setState
+      // The async loader will handle disposal and proper loading
       controller.setBackgroundImage(MemoryImage(bytes));
-      final renderBox =
-          _repaintKey.currentContext?.findRenderObject() as RenderBox?;
-      if (renderBox != null) {
-        final rect = _computeAnchoredImageRect(renderBox.size, img);
-        controller.imageRect.value = rect;
-      }
       controller.isImageVisible.value = true;
-      controller.update();
     } catch (e) {
       Get.snackbar(
         'Camera Error',
@@ -1856,12 +1937,6 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
         colorText: Colors.white,
       );
     }
-  }
-
-  Future<ui.Image> _decodeUiImage(Uint8List bytes) async {
-    final codec = await ui.instantiateImageCodec(bytes);
-    final frame = await codec.getNextFrame();
-    return frame.image;
   }
 
   Future<void> _saveSketch() async {
