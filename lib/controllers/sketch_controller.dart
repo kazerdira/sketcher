@@ -241,6 +241,12 @@ class SketchController extends GetxController {
     strokes.add(finalStroke);
     _currentStroke = null;
     _currentPoints = [];
+
+    // Phase 4: Periodic cache optimization every 20 strokes
+    if (strokes.length % 20 == 0) {
+      SketchPainter.optimizeCaches();
+    }
+
     _saveToHistory();
     update();
   }
@@ -329,8 +335,8 @@ class SketchController extends GetxController {
       _currentPoints = [];
       _lastVelocity = 0.0;
 
-      // Phase 2: Invalidate cache for removed stroke
-      SketchPainter.invalidateStroke(removedStroke);
+      // Phase 4: Enhanced cache cleanup for removed stroke
+      SketchPainter.cleanupStrokeCaches(removedStroke);
 
       strokes.refresh(); // Force GetX observable update
       update();
@@ -343,8 +349,9 @@ class SketchController extends GetxController {
     _currentPoints = [];
     _lastVelocity = 0.0;
 
-    // Phase 2: Clear entire stroke cache
+    // Phase 4: Clear all caches completely
     SketchPainter.clearStrokeCache();
+    SketchPainter.clearBoundsCache();
 
     _saveToHistory();
     update();

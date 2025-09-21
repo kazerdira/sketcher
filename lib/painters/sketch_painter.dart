@@ -188,6 +188,41 @@ class SketchPainter extends CustomPainter {
     _strokeCache.remove(stroke);
   }
 
+  // Phase 4: Enhanced memory management for bounds cache
+  static void clearBoundsCache() {
+    _boundsCache.clear();
+  }
+
+  static void removeBoundsCache(Stroke stroke) {
+    _boundsCache.remove(stroke);
+  }
+
+  static void cleanupStrokeCaches(Stroke stroke) {
+    // Remove from all caches when a stroke is deleted
+    invalidateStroke(stroke);
+    removeBoundsCache(stroke);
+  }
+
+  static void optimizeCaches() {
+    // Phase 4: Implement LRU-style cache optimization
+    if (_strokeCache.length > _maxStrokeCacheSize) {
+      final excess = _strokeCache.length - (_maxStrokeCacheSize * 3 ~/ 4);
+      final oldestKeys = _strokeCache.keys.take(excess).toList();
+      for (final key in oldestKeys) {
+        _strokeCache.remove(key);
+        _strokeDirty.remove(key);
+      }
+    }
+
+    if (_boundsCache.length > _maxCacheSize) {
+      final excess = _boundsCache.length - (_maxCacheSize * 3 ~/ 4);
+      final oldestKeys = _boundsCache.keys.take(excess).toList();
+      for (final key in oldestKeys) {
+        _boundsCache.remove(key);
+      }
+    }
+  }
+
   void _drawPencilStroke(Canvas canvas, Stroke stroke, Paint paint) {
     // Pencil: textured, pressure-sensitive, slightly transparent
     paint
@@ -847,12 +882,9 @@ class SketchPainter extends CustomPainter {
   }
 
   void _cacheStrokeBounds(Stroke stroke, Rect bounds) {
+    // Phase 4: Improved bounds cache management
     if (_boundsCache.length >= _maxCacheSize) {
-      // Clear oldest entries to prevent memory issues
-      final keys = _boundsCache.keys.take(_maxCacheSize ~/ 2).toList();
-      for (final key in keys) {
-        _boundsCache.remove(key);
-      }
+      optimizeCaches(); // Use centralized cache optimization
     }
     _boundsCache[stroke] = bounds;
   }
