@@ -65,38 +65,8 @@ class SketchScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      /*  appBar: AppBar(
-        title: const Text('Professional Sketcher'),
-        actions: [
-          GetBuilder<SketchController>(
-            builder: (controller) {
-              return PopupMenuButton<String>(
-                onSelected: (value) => _handleMenuSelection(value, controller),
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'export',
-                    child: ListTile(
-                      leading: Icon(Icons.download),
-                      title: Text('Export Drawing'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'settings',
-                    child: ListTile(
-                      leading: Icon(Icons.settings),
-                      title: Text('Settings'),
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ],
-      ),*/
-      body: const DrawingCanvas(),
+    return const Scaffold(
+      body: DrawingCanvas(),
     );
   }
 

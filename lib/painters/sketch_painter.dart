@@ -179,13 +179,19 @@ class SketchPainter extends CustomPainter {
 
   // Static methods for cache management
   static void clearStrokeCache() {
+    // CRITICAL: Dispose all cached images before clearing to prevent memory leaks
+    for (final image in _strokeCache.values) {
+      image?.dispose();
+    }
     _strokeCache.clear();
     _strokeDirty.clear();
   }
 
   static void invalidateStroke(Stroke stroke) {
     _strokeDirty[stroke] = true;
-    _strokeCache.remove(stroke);
+    // CRITICAL: Dispose cached image before removing to prevent memory leak
+    final cachedImage = _strokeCache.remove(stroke);
+    cachedImage?.dispose();
   }
 
   // Phase 4: Enhanced memory management for bounds cache
@@ -209,7 +215,9 @@ class SketchPainter extends CustomPainter {
       final excess = _strokeCache.length - (_maxStrokeCacheSize * 3 ~/ 4);
       final oldestKeys = _strokeCache.keys.take(excess).toList();
       for (final key in oldestKeys) {
-        _strokeCache.remove(key);
+        // CRITICAL: Dispose cached image before removing to prevent memory leak
+        final cachedImage = _strokeCache.remove(key);
+        cachedImage?.dispose();
         _strokeDirty.remove(key);
       }
     }
