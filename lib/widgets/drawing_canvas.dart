@@ -48,117 +48,157 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
             builder: (context, constraints) {
               return Listener(
                 onPointerDown: (event) {
-                  // ignore: avoid_print
-                  print('👆 pointer down');
-                  final newCount = (_pointerCount + 1).clamp(0, 10);
-                  final scenePos = controller.transformationController
-                      .toScene(event.localPosition);
-                  final isStylus = event.kind == ui.PointerDeviceKind.stylus ||
-                      event.kind == ui.PointerDeviceKind.invertedStylus;
-                  final isMouse = event.kind == ui.PointerDeviceKind.mouse;
-                  final inputAllowed = !controller.stylusOnlyMode.value
-                      ? true
-                      : (isStylus || isMouse);
-
-                  if (newCount == 1 && inputAllowed) {
-                    // Defer starting stroke until we see movement or a tap completes.
-                    _downPos = scenePos;
-                    _pendingTap = true;
-                    _cursorPos = scenePos;
-                  } else {
-                    // Multi-touch: cancel any pending tap or drawing.
-                    _pendingTap = false;
-                    if (_isDrawing) {
-                      _isDrawing = false;
-                      controller.endStroke();
-                      _cursorPos = null;
-                    }
-                  }
-                  _pointerCount = newCount;
-                  setState(() {});
-                },
-                onPointerMove: (event) {
-                  final isStylus = event.kind == ui.PointerDeviceKind.stylus ||
-                      event.kind == ui.PointerDeviceKind.invertedStylus;
-                  final isMouse = event.kind == ui.PointerDeviceKind.mouse;
-                  final inputAllowed = !controller.stylusOnlyMode.value
-                      ? true
-                      : (isStylus || isMouse);
-                  if (_pointerCount == 1 && inputAllowed) {
+                  // Phase 3: Error boundary for pointer down events
+                  try {
+                    // ignore: avoid_print
+                    print('👆 pointer down');
+                    final newCount = (_pointerCount + 1).clamp(0, 10);
                     final scenePos = controller.transformationController
                         .toScene(event.localPosition);
-                    // Extract stylus tilt data for enhanced drawing (available on supported devices)
-                    final tiltX = event.orientation; // Stylus orientation/tilt
-                    final tiltY =
-                        0.0; // Flutter doesn't expose separate tiltY yet
+                    final isStylus =
+                        event.kind == ui.PointerDeviceKind.stylus ||
+                            event.kind == ui.PointerDeviceKind.invertedStylus;
+                    final isMouse = event.kind == ui.PointerDeviceKind.mouse;
+                    final inputAllowed = !controller.stylusOnlyMode.value
+                        ? true
+                        : (isStylus || isMouse);
 
-                    if (!_isDrawing && _pendingTap && _downPos != null) {
-                      final moved = (scenePos - _downPos!).distance;
-                      // Adjust touch slop based on zoom level - at high zoom, use smaller slop in scene coordinates
-                      final zoomScale = controller
-                          .transformationController.value
-                          .getMaxScaleOnAxis();
-                      final adjustedTouchSlop = _touchSlop / zoomScale;
-                      if (moved >= adjustedTouchSlop) {
-                        // Start drawing after surpassing touch slop.
-                        _isDrawing = true;
-                        _pendingTap = false;
-                        HapticFeedback.lightImpact();
-                        controller.startStroke(_downPos!, 1.0,
-                            tiltX: tiltX, tiltY: tiltY);
+                    if (newCount == 1 && inputAllowed) {
+                      // Defer starting stroke until we see movement or a tap completes.
+                      _downPos = scenePos;
+                      _pendingTap = true;
+                      _cursorPos = scenePos;
+                    } else {
+                      // Multi-touch: cancel any pending tap or drawing.
+                      _pendingTap = false;
+                      if (_isDrawing) {
+                        _isDrawing = false;
+                        controller.endStroke();
+                        _cursorPos = null;
+                      }
+                    }
+                    _pointerCount = newCount;
+                    setState(() {});
+                  } catch (e) {
+                    debugPrint('Pointer down error: $e');
+                    // Graceful recovery: reset drawing state
+                    _cancelDrawing();
+                  }
+                },
+                onPointerMove: (event) {
+                  // Phase 3: Error boundary for pointer move events
+                  try {
+                    final isStylus =
+                        event.kind == ui.PointerDeviceKind.stylus ||
+                            event.kind == ui.PointerDeviceKind.invertedStylus;
+                    final isMouse = event.kind == ui.PointerDeviceKind.mouse;
+                    final inputAllowed = !controller.stylusOnlyMode.value
+                        ? true
+                        : (isStylus || isMouse);
+                    if (_pointerCount == 1 && inputAllowed) {
+                      final scenePos = controller.transformationController
+                          .toScene(event.localPosition);
+                      // Extract stylus tilt data for enhanced drawing (available on supported devices)
+                      final tiltX =
+                          event.orientation; // Stylus orientation/tilt
+                      final tiltY =
+                          0.0; // Flutter doesn't expose separate tiltY yet
+
+                      if (!_isDrawing && _pendingTap && _downPos != null) {
+                        final moved = (scenePos - _downPos!).distance;
+                        // Adjust touch slop based on zoom level - at high zoom, use smaller slop in scene coordinates
+                        final zoomScale = controller
+                            .transformationController.value
+                            .getMaxScaleOnAxis();
+                        final adjustedTouchSlop = _touchSlop / zoomScale;
+                        if (moved >= adjustedTouchSlop) {
+                          // Start drawing after surpassing touch slop.
+                          _isDrawing = true;
+                          _pendingTap = false;
+                          HapticFeedback.lightImpact();
+                          controller.startStroke(_downPos!, 1.0,
+                              tiltX: tiltX, tiltY: tiltY);
+                          controller.addPoint(scenePos, 1.0,
+                              tiltX: tiltX, tiltY: tiltY);
+                        }
+                      } else if (_isDrawing) {
                         controller.addPoint(scenePos, 1.0,
                             tiltX: tiltX, tiltY: tiltY);
                       }
-                    } else if (_isDrawing) {
-                      controller.addPoint(scenePos, 1.0,
-                          tiltX: tiltX, tiltY: tiltY);
+                      _cursorPos = scenePos;
+                      setState(() {});
                     }
-                    _cursorPos = scenePos;
-                    setState(() {});
+                  } catch (e) {
+                    debugPrint('Pointer move error: $e');
+                    // Graceful recovery: maintain current state or cancel if critical error
+                    if (_isDrawing) {
+                      try {
+                        controller.endStroke();
+                      } catch (endError) {
+                        debugPrint(
+                            'Error ending stroke in move error recovery: $endError');
+                      }
+                      _cancelDrawing();
+                    }
                   }
                 },
                 onPointerUp: (event) {
-                  // ignore: avoid_print
-                  print('👇 pointer up');
-                  final isStylus = event.kind == ui.PointerDeviceKind.stylus ||
-                      event.kind == ui.PointerDeviceKind.invertedStylus;
-                  final isMouse = event.kind == ui.PointerDeviceKind.mouse;
-                  final inputAllowed = !controller.stylusOnlyMode.value
-                      ? true
-                      : (isStylus || isMouse);
-                  if (_pointerCount == 1 && inputAllowed) {
+                  // Phase 3: Error boundary for pointer up events
+                  try {
+                    // ignore: avoid_print
+                    print('👇 pointer up');
+                    final isStylus =
+                        event.kind == ui.PointerDeviceKind.stylus ||
+                            event.kind == ui.PointerDeviceKind.invertedStylus;
+                    final isMouse = event.kind == ui.PointerDeviceKind.mouse;
+                    final inputAllowed = !controller.stylusOnlyMode.value
+                        ? true
+                        : (isStylus || isMouse);
+                    if (_pointerCount == 1 && inputAllowed) {
+                      if (_isDrawing) {
+                        _isDrawing = false;
+                        controller.endStroke();
+                        _cursorPos = null;
+                      } else if (_pendingTap && _downPos != null) {
+                        // Treat as a dot tap if no multitouch occurred and no move beyond slop.
+                        final tiltX = event.orientation;
+                        final tiltY = 0.0;
+                        controller.startStroke(_downPos!, 1.0,
+                            tiltX: tiltX, tiltY: tiltY);
+                        controller.endStroke();
+                        _cursorPos = null;
+                      }
+                      _pendingTap = false;
+                      _downPos = null;
+                    }
+                    _pointerCount = (_pointerCount - 1).clamp(0, 10);
+                    setState(() {});
+                  } catch (e) {
+                    debugPrint('Pointer up error: $e');
+                    // Graceful recovery: ensure clean state
+                    _cancelDrawing();
+                  }
+                },
+                onPointerCancel: (event) {
+                  // Phase 3: Error boundary for pointer cancel events
+                  try {
+                    // ignore: avoid_print
+                    print('❌ pointer cancel');
                     if (_isDrawing) {
                       _isDrawing = false;
-                      controller.endStroke();
-                      _cursorPos = null;
-                    } else if (_pendingTap && _downPos != null) {
-                      // Treat as a dot tap if no multitouch occurred and no move beyond slop.
-                      final tiltX = event.orientation;
-                      final tiltY = 0.0;
-                      controller.startStroke(_downPos!, 1.0,
-                          tiltX: tiltX, tiltY: tiltY);
                       controller.endStroke();
                       _cursorPos = null;
                     }
                     _pendingTap = false;
                     _downPos = null;
-                  }
-                  _pointerCount = (_pointerCount - 1).clamp(0, 10);
-                  setState(() {});
-                },
-                onPointerCancel: (event) {
-                  // ignore: avoid_print
-                  print('❌ pointer cancel');
-                  if (_isDrawing) {
-                    _isDrawing = false;
-                    controller.endStroke();
-                    _cursorPos = null;
-                  }
-                  _pendingTap = false;
-                  _downPos = null;
 
-                  _pointerCount = (_pointerCount - 1).clamp(0, 10);
-                  setState(() {});
+                    _pointerCount = (_pointerCount - 1).clamp(0, 10);
+                    setState(() {});
+                  } catch (e) {
+                    debugPrint('Pointer cancel error: $e');
+                    // Graceful recovery: force clean state
+                    _cancelDrawing();
+                  }
                 },
                 child: GestureDetector(
                   behavior: HitTestBehavior.opaque,
@@ -359,6 +399,30 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
   void dispose() {
     _backgroundImageData?.dispose(); // CRITICAL: Clean up on disposal
     super.dispose();
+  }
+
+  // Phase 3: Error recovery helper method
+  void _cancelDrawing() {
+    try {
+      _isDrawing = false;
+      _pendingTap = false;
+      _downPos = null;
+      _cursorPos = null;
+      _pointerCount = 0;
+
+      // Try to cancel current stroke safely
+      if (controller.currentStroke != null) {
+        controller.endStroke();
+      }
+
+      setState(() {});
+    } catch (e) {
+      debugPrint('Error in _cancelDrawing: $e');
+      // Final fallback: just reset basic state
+      _isDrawing = false;
+      _pendingTap = false;
+      _pointerCount = 0;
+    }
   }
 
   Rect _computeSceneViewport(BoxConstraints constraints) {

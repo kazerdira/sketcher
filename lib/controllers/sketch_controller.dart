@@ -161,94 +161,135 @@ class SketchController extends GetxController {
   // Drawing methods
   void startStroke(Offset point, double pressure,
       {double tiltX = 0.0, double tiltY = 0.0}) {
-    _currentPoints = [];
-    final drawingPoint = DrawingPoint(
-      offset: point,
-      pressure: pressure,
-      timestamp: DateTime.now().millisecondsSinceEpoch.toDouble(),
-      tiltX: tiltX,
-      tiltY: tiltY,
-    );
+    // Phase 3: Error boundary for stroke creation
+    try {
+      _currentPoints = [];
+      final drawingPoint = DrawingPoint(
+        offset: point,
+        pressure: pressure,
+        timestamp: DateTime.now().millisecondsSinceEpoch.toDouble(),
+        tiltX: tiltX,
+        tiltY: tiltY,
+      );
 
-    _currentPoints.add(drawingPoint);
-    _lastOffset = point;
-    _lastPointTime = DateTime.now();
-    _lastVelocity = 0.0;
+      _currentPoints.add(drawingPoint);
+      _lastOffset = point;
+      _lastPointTime = DateTime.now();
+      _lastVelocity = 0.0;
 
-    // Initialize current stroke immediately for real-time preview
-    _updateCurrentStroke();
+      // Initialize current stroke immediately for real-time preview
+      _updateCurrentStroke();
 
-    update();
+      update();
+    } catch (e) {
+      debugPrint('Stroke creation failed: $e');
+      // Graceful recovery: reset drawing state
+      _currentStroke = null;
+      _currentPoints = [];
+
+      Get.snackbar(
+        'Drawing Error',
+        'Failed to start stroke. Please try again.',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 2),
+      );
+    }
   }
 
   void addPoint(Offset point, double pressure,
       {double tiltX = 0.0, double tiltY = 0.0}) {
-    if (_currentPoints.isEmpty) return;
+    // Phase 3: Error boundary for point addition
+    try {
+      if (_currentPoints.isEmpty) return;
 
-    final now = DateTime.now();
-    final timeDelta = now.difference(_lastPointTime).inMilliseconds;
-    final distance = (point - _lastOffset).distance;
+      final now = DateTime.now();
+      final timeDelta = now.difference(_lastPointTime).inMilliseconds;
+      final distance = (point - _lastOffset).distance;
 
-    // Calculate velocity for dynamic sizing
-    double velocity = 0.0;
-    if (timeDelta > 0) {
-      velocity = distance / timeDelta;
-      _lastVelocity = velocity;
+      // Calculate velocity for dynamic sizing
+      double velocity = 0.0;
+      if (timeDelta > 0) {
+        velocity = distance / timeDelta;
+        _lastVelocity = velocity;
+      }
+
+      final drawingPoint = DrawingPoint(
+        offset: point,
+        pressure: pressure,
+        timestamp: now.millisecondsSinceEpoch.toDouble(),
+        tiltX: tiltX,
+        tiltY: tiltY,
+      );
+
+      _currentPoints.add(drawingPoint);
+      _lastOffset = point;
+      _lastPointTime = now;
+
+      // Create temporary stroke for real-time preview
+      _updateCurrentStroke();
+      update();
+    } catch (e) {
+      debugPrint('Point addition failed: $e');
+      // Continue drawing if possible, don't crash the entire stroke
+      // Just skip this point and continue
     }
-
-    final drawingPoint = DrawingPoint(
-      offset: point,
-      pressure: pressure,
-      timestamp: now.millisecondsSinceEpoch.toDouble(),
-      tiltX: tiltX,
-      tiltY: tiltY,
-    );
-
-    _currentPoints.add(drawingPoint);
-    _lastOffset = point;
-    _lastPointTime = now;
-
-    // Create temporary stroke for real-time preview
-    _updateCurrentStroke();
-    update();
   }
 
   void endStroke() {
-    if (_currentPoints.isEmpty) return;
+    // Phase 3: Error boundary for stroke completion
+    try {
+      if (_currentPoints.isEmpty) return;
 
-    // Smooth the final stroke
-    final smoothedPoints = _smoothPoints(_currentPoints);
+      // Smooth the final stroke
+      final smoothedPoints = _smoothPoints(_currentPoints);
 
-    final config = ToolConfig.configs[currentTool.value]!;
-    final finalStroke = Stroke(
-      points: smoothedPoints,
-      color: currentTool.value == DrawingTool.eraser
-          ? Colors.transparent
-          : currentColor.value,
-      width: _calculateDynamicWidth(),
-      tool: currentTool.value,
-      opacity: toolOpacity.value,
-      blendMode: config.blendMode,
-      isEraser: currentTool.value == DrawingTool.eraser,
-      brushMode: currentTool.value == DrawingTool.brush
-          ? currentBrushMode.value
-          : null,
-      calligraphyNibAngleDeg: calligraphyNibAngleDeg.value,
-      calligraphyNibWidthFactor: calligraphyNibWidthFactor.value,
-      pastelGrainDensity: pastelGrainDensity.value,
-    );
+      final config = ToolConfig.configs[currentTool.value]!;
+      final finalStroke = Stroke(
+        points: smoothedPoints,
+        color: currentTool.value == DrawingTool.eraser
+            ? Colors.transparent
+            : currentColor.value,
+        width: _calculateDynamicWidth(),
+        tool: currentTool.value,
+        opacity: toolOpacity.value,
+        blendMode: config.blendMode,
+        isEraser: currentTool.value == DrawingTool.eraser,
+        brushMode: currentTool.value == DrawingTool.brush
+            ? currentBrushMode.value
+            : null,
+        calligraphyNibAngleDeg: calligraphyNibAngleDeg.value,
+        calligraphyNibWidthFactor: calligraphyNibWidthFactor.value,
+        pastelGrainDensity: pastelGrainDensity.value,
+      );
 
-    strokes.add(finalStroke);
-    _currentStroke = null;
-    _currentPoints = [];
+      strokes.add(finalStroke);
+      _currentStroke = null;
+      _currentPoints = [];
 
-    // Phase 4: Periodic cache optimization every 20 strokes
-    if (strokes.length % 20 == 0) {
-      SketchPainter.optimizeCaches();
+      // Phase 4: Periodic cache optimization every 20 strokes
+      if (strokes.length % 20 == 0) {
+        SketchPainter.optimizeCaches();
+      }
+
+      _saveToHistory();
+      update();
+    } catch (e) {
+      debugPrint('Stroke completion failed: $e');
+      // Graceful recovery: clean up current stroke state
+      _currentStroke = null;
+      _currentPoints = [];
+
+      Get.snackbar(
+        'Drawing Error',
+        'Failed to complete stroke. Please try again.',
+        backgroundColor: Colors.red,
+        colorText: Colors.white,
+        duration: const Duration(seconds: 2),
+      );
+
+      update(); // Ensure UI updates even on error
     }
-
-    _saveToHistory();
-    update();
   }
 
   void _updateCurrentStroke() {
