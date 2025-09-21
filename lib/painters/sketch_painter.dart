@@ -24,6 +24,50 @@ class SketchPainter extends CustomPainter {
   static final Map<Stroke, bool> _strokeDirty = <Stroke, bool>{};
   static const int _maxStrokeCacheSize = 100;
 
+  // Phase 1: Airbrush Performance Optimization
+  /// Calculate dynamic performance budget based on stroke complexity
+  static int _calculateParticleBudget(int pointCount, double strokeWidth) {
+    // Dynamic performance budgeting based on stroke complexity
+    final complexity = pointCount + (strokeWidth / 10).round();
+
+    if (complexity > 150) return 6; // Heavy stroke - minimum particles
+    if (complexity > 80) return 10; // Medium stroke - reduced particles
+    if (complexity > 40) return 15; // Light stroke - moderate particles
+    return 20; // Very light stroke - full quality
+  }
+
+  /// Viewport culling to skip invisible particles
+  static bool _shouldCullParticle(
+      Offset position, Rect? viewport, double strokeWidth) {
+    if (viewport == null) return false;
+
+    // Expand viewport by stroke width to account for blur effects
+    final margin = strokeWidth * 2;
+    final expandedViewport = viewport.inflate(margin);
+
+    return !expandedViewport.contains(position);
+  }
+
+  /// Draw core stroke foundation to prevent gaps at high drawing speeds
+  void _drawAirbrushCore(Canvas canvas, List<DrawingPoint> points,
+      Color baseColor, double opacity, double strokeWidth) {
+    if (points.length < 2) return;
+
+    for (int i = 0; i < points.length - 1; i++) {
+      final a = points[i];
+      final b = points[i + 1];
+      final corePaint = Paint()
+        ..color = baseColor.withValues(alpha: opacity * 0.15)
+        ..style = PaintingStyle.stroke
+        ..strokeCap = StrokeCap.round
+        ..isAntiAlias = true
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.5)
+        ..strokeWidth =
+            math.max(0.5, (a.pressure + b.pressure) * 0.5 * strokeWidth * 0.4);
+      canvas.drawLine(a.offset, b.offset, corePaint);
+    }
+  }
+
   SketchPainter({
     required this.strokes,
     this.currentStroke,
@@ -596,49 +640,60 @@ class SketchPainter extends CustomPainter {
         }
         break;
       case BrushMode.airbrush:
-        // Airbrush: soft spray particles with a faint core
+        // PHASE 1: Industrial-grade airbrush with performance budgeting
         {
           final baseColor = paint.color;
-          final rnd = math.Random(9029);
-          // Draw a faint core to guide stroke shape
-          for (int i = 0; i < points.length - 1; i++) {
-            final a = points[i];
-            final b = points[i + 1];
-            final corePaint = Paint()
-              ..color = baseColor.withValues(alpha: stroke.opacity * 0.15)
-              ..style = PaintingStyle.stroke
-              ..strokeCap = StrokeCap.round
-              ..isAntiAlias = true
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.5)
-              ..strokeWidth = math.max(
-                  0.5, (a.pressure + b.pressure) * 0.5 * stroke.width * 0.4);
-            canvas.drawLine(a.offset, b.offset, corePaint);
-          }
 
-          // Spray particles around each segment
+          // Use stroke-consistent seeding to prevent frame-rate variations
+          final strokeHash = stroke.points.fold<int>(
+              0,
+              (hash, p) =>
+                  hash ^
+                  (p.offset.dx.toInt() * 73856093) ^
+                  (p.offset.dy.toInt() * 19349663));
+          final rnd = math.Random(strokeHash);
+
+          // Calculate performance budget
+          final maxParticlesPerSegment =
+              _calculateParticleBudget(points.length, stroke.width);
+
+          // Draw core stroke foundation (prevents gaps at high drawing speeds)
+          _drawAirbrushCore(
+              canvas, points, baseColor, stroke.opacity, stroke.width);
+
+          // Optimized particle generation
           for (int i = 0; i < points.length - 1; i++) {
             final a = points[i];
             final b = points[i + 1];
             final seg = b.offset - a.offset;
             final len = seg.distance;
             if (len <= 0) continue;
-            // Particle budget scales with stroke length and size
-            final baseCount =
-                (len * 0.6 + stroke.width * 1.5).clamp(6, 80).toInt();
+
+            // CRITICAL OPTIMIZATION: Adaptive particle count
+            final speedFactor =
+                math.min(len / 10.0, 2.0); // Reduce particles for fast strokes
+            final baseCount = (stroke.width * 0.15 * speedFactor)
+                .clamp(2, maxParticlesPerSegment) // Use performance budget
+                .toInt();
+
             for (int k = 0; k < baseCount; k++) {
               final t = rnd.nextDouble();
               final p = Offset.lerp(a.offset, b.offset, t)!;
-              // Radius depends on stroke width and pressure
+
+              // Viewport culling: skip invisible particles
+              if (_shouldCullParticle(p, viewport, stroke.width)) continue;
+
+              // Rest of particle generation...
               final pr = a.pressure * (1 - t) + b.pressure * t;
               final radius =
                   (stroke.width * (0.15 + rnd.nextDouble() * 0.35) * pr)
                       .clamp(0.4, 6.0);
-              // Scatter perpendicular with Gaussian-ish distribution
               final perp = _getPerpendicular(a.offset, b.offset);
               final spread = stroke.width * (0.6 + rnd.nextDouble() * 0.8);
-              final jitter = (rnd.nextDouble() - 0.5) +
-                  (rnd.nextDouble() - 0.5); // ~triangular
+              final jitter =
+                  (rnd.nextDouble() - 0.5) + (rnd.nextDouble() - 0.5);
               final offset = perp * (jitter * spread);
+
               final drop = Paint()
                 ..color = baseColor.withValues(
                     alpha: stroke.opacity * (0.05 + rnd.nextDouble() * 0.22))
