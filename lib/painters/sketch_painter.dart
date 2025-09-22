@@ -4,7 +4,6 @@ import 'dart:math' as math;
 import '../models/stroke.dart';
 import '../models/drawing_tool.dart';
 import '../models/brush_mode.dart';
-import 'brushes/airbrush_renderer.dart';
 import 'brushes/calligraphy_renderer.dart';
 import 'brushes/charcoal_renderer.dart';
 import 'brushes/watercolor_renderer.dart';
@@ -457,12 +456,6 @@ class SketchPainter extends CustomPainter {
                 ),
             );
           }
-        }
-        break;
-      case BrushMode.airbrush:
-        {
-          final baseColor = paint.color;
-          AirbrushRenderer.draw(canvas, points, stroke, baseColor);
         }
         break;
       case BrushMode.calligraphy:

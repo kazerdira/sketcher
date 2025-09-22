@@ -1,0 +1,21 @@
+# CMake generation dependency list for this directory.
+C:/mingw64/share/cmake-3.28/Modules/CMakeCXXInformation.cmake
+C:/mingw64/share/cmake-3.28/Modules/CMakeCommonLanguageInclude.cmake
+C:/mingw64/share/cmake-3.28/Modules/CMakeGenericSystem.cmake
+C:/mingw64/share/cmake-3.28/Modules/CMakeInitializeConfigs.cmake
+C:/mingw64/share/cmake-3.28/Modules/CMakeLanguageInformation.cmake
+C:/mingw64/share/cmake-3.28/Modules/CMakeRCInformation.cmake
+C:/mingw64/share/cmake-3.28/Modules/CMakeSystemSpecificInformation.cmake
+C:/mingw64/share/cmake-3.28/Modules/CMakeSystemSpecificInitialize.cmake
+C:/mingw64/share/cmake-3.28/Modules/Compiler/CMakeCommonCompilerMacros.cmake
+C:/mingw64/share/cmake-3.28/Modules/Compiler/MSVC-CXX.cmake
+C:/mingw64/share/cmake-3.28/Modules/Compiler/MSVC.cmake
+C:/mingw64/share/cmake-3.28/Modules/Platform/Windows-Initialize.cmake
+C:/mingw64/share/cmake-3.28/Modules/Platform/Windows-MSVC-CXX.cmake
+C:/mingw64/share/cmake-3.28/Modules/Platform/Windows-MSVC.cmake
+C:/mingw64/share/cmake-3.28/Modules/Platform/Windows.cmake
+C:/mingw64/share/cmake-3.28/Modules/Platform/WindowsPaths.cmake
+F:/sketcher/native/CMakeLists.txt
+F:/sketcher/native/build/windows-x64/CMakeFiles/3.28.1/CMakeCXXCompiler.cmake
+F:/sketcher/native/build/windows-x64/CMakeFiles/3.28.1/CMakeRCCompiler.cmake
+F:/sketcher/native/build/windows-x64/CMakeFiles/3.28.1/CMakeSystem.cmake

@@ -32,6 +32,9 @@ dependencies:
   
   # Color Picker
   flutter_colorpicker: ^1.1.0
+  
+  # Native FFI for high-performance calculations
+  ffi: ^2.1.0
 
 
 dev_dependencies:

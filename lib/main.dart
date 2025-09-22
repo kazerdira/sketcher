@@ -3,9 +3,18 @@ import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'controllers/sketch_controller.dart';
 import 'widgets/drawing_canvas.dart';
+import 'native/sketcher_native.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize native library for high-performance calculations
+  final nativeInitialized = SketcherNative.initialize();
+  if (nativeInitialized) {
+    debugPrint('🚀 Native calligraphy library initialized successfully');
+  } else {
+    debugPrint('⚠️  Native library not available, using Dart fallback');
+  }
 
   // Ensure a clean state for hot restarts/tests
   if (Get.isRegistered<SketchController>()) {

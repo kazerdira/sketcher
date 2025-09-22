@@ -1,0 +1,3 @@
+F:/sketcher/native/build/windows-x64/CMakeFiles/sketcher_native.dir
+F:/sketcher/native/build/windows-x64/CMakeFiles/ALL_BUILD.dir
+F:/sketcher/native/build/windows-x64/CMakeFiles/ZERO_CHECK.dir

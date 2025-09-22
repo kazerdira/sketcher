@@ -580,16 +580,6 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
           ),
           const SizedBox(width: 8),
           Tooltip(
-            message: 'Airbrush',
-            child: ChoiceChip(
-              key: const Key('brush-mode-airbrush'),
-              label: const Text('Airbrush'),
-              selected: current == BrushMode.airbrush,
-              onSelected: (_) => controller.setBrushMode(BrushMode.airbrush),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Tooltip(
             message: 'Calligraphy Brush',
             child: ChoiceChip(
               key: const Key('brush-mode-calligraphy'),
