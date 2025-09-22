@@ -9,6 +9,10 @@ import '../../native/sketcher_native.dart';
 class CalligraphyRenderer {
   // Render cache for performance
   static final Map<String, List<CalligraphySegmentData>> _segmentCache = {};
+  // Cache mesh data (positions/indices/alphas) to avoid FFI recompute on zoom
+  static final Map<String,
+          ({List<Offset> positions, List<int> indices, List<double> alphas})>
+      _meshDataCache = {};
 
   // Performance metrics
   static int _cacheHits = 0;
@@ -81,24 +85,35 @@ class CalligraphyRenderer {
         spacing: math.max(0.8, strokeWidth * 0.35),
       );
 
-      final mesh = SketcherNative.buildCalligraphyMesh(
-        points: prePoints,
-        strokeWidth: strokeWidth,
-        opacity: opacity,
-        nibAngleDeg: nibAngleDeg,
-        nibWidthFactor: nibWidthFactor,
-      );
-      if (mesh != null &&
-          mesh.positions.isNotEmpty &&
-          mesh.indices.isNotEmpty) {
-        final colors = List<Color>.generate(mesh.positions.length,
-            (i) => color.withValues(alpha: (mesh.alphas[i] * opacity)),
+      // Mesh cache keyed by stroke+params, decoupled from color/opacity
+      ({List<Offset> positions, List<int> indices, List<double> alphas})? mesh;
+      if (enableCache && cacheKey != null) {
+        mesh = _meshDataCache[cacheKey];
+      }
+      if (mesh == null) {
+        final built = SketcherNative.buildCalligraphyMesh(
+          points: prePoints,
+          strokeWidth: strokeWidth,
+          opacity: opacity,
+          nibAngleDeg: nibAngleDeg,
+          nibWidthFactor: nibWidthFactor,
+        );
+        if (built != null && enableCache && cacheKey != null) {
+          // Cache geometry only; colors will be rebuilt per paint
+          _meshDataCache[cacheKey] = built;
+        }
+        mesh = built;
+      }
+      final m = mesh;
+      if (m != null && m.positions.isNotEmpty && m.indices.isNotEmpty) {
+        final colors = List<Color>.generate(m.positions.length,
+            (i) => color.withValues(alpha: (m.alphas[i] * opacity)),
             growable: false);
         final vertices = ui.Vertices(
           VertexMode.triangles,
-          mesh.positions,
+          m.positions,
           colors: colors,
-          indices: mesh.indices,
+          indices: m.indices,
         );
 
         final paint = Paint()
@@ -109,7 +124,7 @@ class CalligraphyRenderer {
         stopwatch.stop();
         print(
             '✒️ CALLIGRAPHY: Mesh path in ${stopwatch.elapsedMicroseconds}μs | '
-            'V:${mesh.positions.length} I:${mesh.indices.length}');
+            'V:${m.positions.length} I:${m.indices.length}');
         return;
       }
     }
@@ -288,6 +303,7 @@ class CalligraphyRenderer {
   /// Clear performance caches
   static void clearCache() {
     _segmentCache.clear();
+    _meshDataCache.clear();
     _cacheHits = 0;
     _cacheMisses = 0;
     _nativeCalculations = 0;
