@@ -4,6 +4,12 @@ import 'dart:math' as math;
 import '../models/stroke.dart';
 import '../models/drawing_tool.dart';
 import '../models/brush_mode.dart';
+import 'brushes/airbrush_renderer.dart';
+import 'brushes/calligraphy_renderer.dart';
+import 'brushes/charcoal_renderer.dart';
+import 'brushes/watercolor_renderer.dart';
+import 'brushes/oil_paint_renderer.dart';
+import 'brushes/pastel_renderer.dart';
 
 class SketchPainter extends CustomPainter {
   final List<Stroke> strokes;
@@ -453,287 +459,55 @@ class SketchPainter extends CustomPainter {
           }
         }
         break;
-      case BrushMode.charcoal:
-        // Phase 3: Optimized charcoal with reduced particle count
-        final baseColor = paint.color;
-        final dabPaint = Paint()
-          ..style = PaintingStyle.fill
-          ..isAntiAlias = true;
-        for (final p in points) {
-          final w = (stroke.width * p.pressure).clamp(0.5, 200.0);
-          dabPaint.color = baseColor.withValues(alpha: stroke.opacity * 0.7);
-          canvas.drawCircle(p.offset, w * 0.5, dabPaint);
-          // Optimized grain: reduced from 6-18 to 3-8 particles
-          final rnd = math.Random(
-              p.offset.dx.toInt() * 73856093 ^ p.offset.dy.toInt() * 19349663);
-          final grains = (w / 4).round().clamp(3, 8); // Reduced particle count
-          for (int i = 0; i < grains; i++) {
-            final ang = rnd.nextDouble() * 2 * math.pi;
-            final dist = rnd.nextDouble() * w * 0.5;
-            final gSize = rnd.nextDouble() * 1.3 + 0.4;
-            final gOff = Offset(math.cos(ang) * dist, math.sin(ang) * dist);
-            final gColor = baseColor.withValues(
-                alpha: stroke.opacity * (0.12 + rnd.nextDouble() * 0.25));
-            canvas.drawCircle(p.offset + gOff, gSize, dabPaint..color = gColor);
-          }
-        }
-        break;
-      case BrushMode.watercolor:
-        // Watercolor: multiple soft, translucent layers with blur
-        if (stroke.points.length == 1) {
-          final p = points.first;
-          final w = (stroke.width * p.pressure).clamp(0.5, 200.0);
-          final spotPaint = Paint()
-            ..color = paint.color.withValues(alpha: stroke.opacity * 0.25)
-            ..style = PaintingStyle.fill
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0);
-          canvas.drawCircle(p.offset, w * 0.6, spotPaint);
-          break;
-        }
-        final path =
-            _createCatmullRomPath(stroke.points, closed: false, alpha: 0.5);
-        // Phase 3: Simplified watercolor with reduced layers (3 -> 2)
-        final layers = [
-          {"widthFactor": 1.2, "alpha": 0.22, "blur": 2.5},
-          {"widthFactor": 0.9, "alpha": 0.35, "blur": 1.0},
-        ];
-        for (final layer in layers) {
-          final layerPaint = Paint()
-            ..color = paint.color
-                .withValues(alpha: stroke.opacity * (layer["alpha"] as double))
-            ..style = PaintingStyle.stroke
-            ..strokeCap = StrokeCap.round
-            ..strokeJoin = StrokeJoin.round
-            ..isAntiAlias = true
-            ..maskFilter =
-                MaskFilter.blur(BlurStyle.normal, layer["blur"] as double)
-            ..strokeWidth = stroke.width * (layer["widthFactor"] as double);
-          canvas.drawPath(path, layerPaint);
-        }
-        // Optional: subtle bleed at the end point
-        final end = stroke.points.last.offset;
-        final bleedPaint = Paint()
-          ..color = paint.color.withValues(alpha: stroke.opacity * 0.12)
-          ..style = PaintingStyle.fill
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2.0);
-        canvas.drawCircle(end, stroke.width * 0.6, bleedPaint);
-        break;
-      case BrushMode.oilPaint:
-        // Oil paint: impasto-like layered stroke with subtle highlight
-        {
-          final path =
-              _createCatmullRomPath(stroke.points, closed: false, alpha: 0.5);
-          final baseColor = paint.color;
-
-          // Underpaint: slightly darker, wider, soft
-          final under = Paint()
-            ..color = baseColor.withValues(
-                alpha: (stroke.opacity * 0.22).clamp(0.0, 1.0))
-            ..style = PaintingStyle.stroke
-            ..strokeCap = StrokeCap.round
-            ..strokeJoin = StrokeJoin.round
-            ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 1.5)
-            ..strokeWidth = stroke.width * 1.35;
-          canvas.drawPath(path, under);
-
-          // Body paint: main opaque body with slight texture variation
-          final body = Paint()
-            ..color =
-                baseColor.withValues(alpha: stroke.opacity.clamp(0.0, 1.0))
-            ..style = PaintingStyle.stroke
-            ..strokeCap = StrokeCap.round
-            ..strokeJoin = StrokeJoin.round
-            ..strokeWidth = stroke.width;
-          canvas.drawPath(path, body);
-
-          // Ridge highlight: lighter sheen along one side based on tangent
-          final highlight = Paint()
-            ..color = Colors.white.withValues(alpha: (stroke.opacity * 0.18))
-            ..style = PaintingStyle.stroke
-            ..strokeCap = StrokeCap.round
-            ..strokeJoin = StrokeJoin.round
-            ..strokeWidth = math.max(1.0, stroke.width * 0.35)
-            ..blendMode = BlendMode.screen;
-
-          // Approximate highlight by stroking a slightly offset path
-          final hlPath = Path();
-          if (points.isNotEmpty) {
-            hlPath.moveTo(points.first.offset.dx, points.first.offset.dy);
-            for (int i = 0; i < points.length - 1; i++) {
-              final a = points[i].offset;
-              final b = points[i + 1].offset;
-              final perp = _getPerpendicular(a, b);
-              final offsetAmt = math.max(0.6, stroke.width * 0.15);
-              final a2 = a + perp * offsetAmt;
-              final b2 = b + perp * offsetAmt;
-              hlPath.lineTo(b2.dx, b2.dy);
-              if (i == 0) {
-                hlPath.moveTo(a2.dx, a2.dy);
-              }
-            }
-          }
-          canvas.drawPath(hlPath, highlight);
-
-          // Occasional thick daubs along the path to simulate impasto
-          final rnd = math.Random(1337);
-          for (int i = 0; i < points.length; i += 6) {
-            final p = points[i];
-            final w = (stroke.width * p.pressure).clamp(0.8, 200.0);
-            final daub = Paint()
-              ..color = baseColor.withValues(alpha: (stroke.opacity * 0.35))
-              ..style = PaintingStyle.fill;
-            final rx = w * (0.45 + rnd.nextDouble() * 0.25);
-            final ry = w * (0.25 + rnd.nextDouble() * 0.2);
-            final ang = rnd.nextDouble() * math.pi;
-            canvas.save();
-            canvas.translate(p.offset.dx, p.offset.dy);
-            canvas.rotate(ang);
-            canvas.drawOval(
-                Rect.fromCenter(center: Offset.zero, width: rx, height: ry),
-                daub);
-            canvas.restore();
-          }
-        }
-        break;
       case BrushMode.airbrush:
-        // Airbrush: soft spray particles with a faint core
         {
           final baseColor = paint.color;
-          final rnd = math.Random(9029);
-          // Draw a faint core to guide stroke shape
-          for (int i = 0; i < points.length - 1; i++) {
-            final a = points[i];
-            final b = points[i + 1];
-            final corePaint = Paint()
-              ..color = baseColor.withValues(alpha: stroke.opacity * 0.15)
-              ..style = PaintingStyle.stroke
-              ..strokeCap = StrokeCap.round
-              ..isAntiAlias = true
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.5)
-              ..strokeWidth = math.max(
-                  0.5, (a.pressure + b.pressure) * 0.5 * stroke.width * 0.4);
-            canvas.drawLine(a.offset, b.offset, corePaint);
-          }
-
-          // Spray particles around each segment
-          for (int i = 0; i < points.length - 1; i++) {
-            final a = points[i];
-            final b = points[i + 1];
-            final seg = b.offset - a.offset;
-            final len = seg.distance;
-            if (len <= 0) continue;
-            // Particle budget scales with stroke length and size
-            final baseCount =
-                (len * 0.6 + stroke.width * 1.5).clamp(6, 80).toInt();
-            for (int k = 0; k < baseCount; k++) {
-              final t = rnd.nextDouble();
-              final p = Offset.lerp(a.offset, b.offset, t)!;
-              // Radius depends on stroke width and pressure
-              final pr = a.pressure * (1 - t) + b.pressure * t;
-              final radius =
-                  (stroke.width * (0.15 + rnd.nextDouble() * 0.35) * pr)
-                      .clamp(0.4, 6.0);
-              // Scatter perpendicular with Gaussian-ish distribution
-              final perp = _getPerpendicular(a.offset, b.offset);
-              final spread = stroke.width * (0.6 + rnd.nextDouble() * 0.8);
-              final jitter = (rnd.nextDouble() - 0.5) +
-                  (rnd.nextDouble() - 0.5); // ~triangular
-              final offset = perp * (jitter * spread);
-              final drop = Paint()
-                ..color = baseColor.withValues(
-                    alpha: stroke.opacity * (0.05 + rnd.nextDouble() * 0.22))
-                ..style = PaintingStyle.fill
-                ..isAntiAlias = true
-                ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.8);
-              canvas.drawCircle(p + offset, radius, drop);
-            }
-          }
+          AirbrushRenderer.draw(canvas, points, stroke, baseColor);
         }
         break;
       case BrushMode.calligraphy:
-        // Calligraphy: flat nib with fixed angle causing thick/thin variation
         {
           final baseColor = paint.color;
-          final nibAngleDeg =
-              stroke.calligraphyNibAngleDeg ?? 40.0; // default if unset
-          final nibAngle = nibAngleDeg * math.pi / 180.0;
-          final nibDir = Offset(math.cos(nibAngle), math.sin(nibAngle));
-          for (int i = 0; i < points.length - 1; i++) {
-            final a = points[i];
-            final b = points[i + 1];
-            final seg = b.offset - a.offset;
-            final len = seg.distance;
-            if (len <= 0.0001) continue;
-            final t = seg / len; // unit tangent
-            // Thickness follows |sin(theta)| between stroke and nib direction
-            final cross = (t.dx * nibDir.dy - t.dy * nibDir.dx).abs();
-            final pressure = (a.pressure + b.pressure) * 0.5;
-            final widthFactor =
-                (stroke.calligraphyNibWidthFactor ?? 1.0).clamp(0.3, 2.5);
-            final thickness = math.max(
-              0.6,
-              stroke.width * widthFactor * (0.35 + 0.9 * cross) * pressure,
-            );
-            final core = Paint()
-              ..color = baseColor.withValues(alpha: stroke.opacity)
-              ..style = PaintingStyle.stroke
-              ..strokeCap = StrokeCap.butt
-              ..strokeJoin = StrokeJoin.round
-              ..isAntiAlias = true
-              ..strokeWidth = thickness;
-            canvas.drawLine(a.offset, b.offset, core);
-            // Soft edge pass to slightly feather the ribbon
-            final edge = Paint()
-              ..color = baseColor.withValues(alpha: stroke.opacity * 0.25)
-              ..style = PaintingStyle.stroke
-              ..strokeCap = StrokeCap.butt
-              ..strokeJoin = StrokeJoin.round
-              ..isAntiAlias = true
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.6)
-              ..strokeWidth = thickness * 1.1;
-            canvas.drawLine(a.offset, b.offset, edge);
-          }
+          CalligraphyRenderer.draw(canvas, points, stroke, baseColor);
+        }
+        break;
+      case BrushMode.charcoal:
+        {
+          final baseColor = paint.color;
+          CharcoalRenderer.draw(canvas, points, stroke, baseColor);
+        }
+        break;
+      case BrushMode.watercolor:
+        {
+          final baseColor = paint.color;
+          WatercolorRenderer.draw(
+            canvas,
+            points,
+            stroke,
+            baseColor,
+            (pts, {closed = false, alpha = 0.5}) =>
+                _createCatmullRomPath(pts, closed: closed, alpha: alpha),
+          );
+        }
+        break;
+      case BrushMode.oilPaint:
+        {
+          final baseColor = paint.color;
+          OilPaintRenderer.draw(
+            canvas,
+            points,
+            stroke,
+            baseColor,
+            (pts, {closed = false, alpha = 0.5}) =>
+                _createCatmullRomPath(pts, closed: closed, alpha: alpha),
+            (a, b) => _getPerpendicular(a, b),
+          );
         }
         break;
       case BrushMode.pastel:
-        // Pastel: chalky, layered dabs with grain
         {
           final baseColor = paint.color;
-          final rnd = math.Random(2718);
-          for (final p in points) {
-            final w = (stroke.width * p.pressure).clamp(0.5, 220.0);
-            // Base smudge
-            final base = Paint()
-              ..color = baseColor.withValues(alpha: stroke.opacity * 0.35)
-              ..style = PaintingStyle.fill
-              ..isAntiAlias = true
-              ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 0.8);
-            canvas.drawCircle(p.offset, w * 0.55, base);
-
-            // Chalk body
-            final body = Paint()
-              ..color = baseColor.withValues(alpha: stroke.opacity * 0.55)
-              ..style = PaintingStyle.fill
-              ..isAntiAlias = true;
-            canvas.drawCircle(p.offset, w * 0.42, body);
-
-            // Grain speckles around
-            final grainDensity =
-                (stroke.pastelGrainDensity ?? 1.0).clamp(0.3, 3.0);
-            final grains = (w * 0.8 * grainDensity).round().clamp(4, 50);
-            for (int i = 0; i < grains; i++) {
-              final ang = rnd.nextDouble() * 2 * math.pi;
-              final dist = rnd.nextDouble() * w * 0.6;
-              final gSize = 0.6 + rnd.nextDouble() * 1.4;
-              final gOff = Offset(math.cos(ang) * dist, math.sin(ang) * dist);
-              final alpha = stroke.opacity * (0.06 + rnd.nextDouble() * 0.24);
-              final speck = Paint()
-                ..color = baseColor.withValues(alpha: alpha)
-                ..style = PaintingStyle.fill
-                ..isAntiAlias = true;
-              canvas.drawCircle(p.offset + gOff, gSize, speck);
-            }
-          }
+          PastelRenderer.draw(canvas, points, stroke, baseColor);
         }
         break;
     }
