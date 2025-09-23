@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'dart:async'; // Added for Completer and TimeoutException
 import 'package:flutter/services.dart';
@@ -13,6 +12,11 @@ import '../painters/sketch_painter.dart';
 import '../models/drawing_tool.dart';
 import '../models/stroke.dart';
 import '../models/brush_mode.dart';
+import 'drawing/toolbar.dart';
+import 'drawing/inline_controls.dart';
+import 'drawing/color_picker_dialog.dart';
+import 'drawing/advanced_settings_sheet.dart';
+import 'drawing/image_picker_widget.dart';
 
 class DrawingCanvas extends StatefulWidget {
   const DrawingCanvas({Key? key}) : super(key: key);
@@ -36,13 +40,14 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
 
   // Phase 2: Async image loading state
   bool _isLoadingImage = false;
-  String? _imageLoadError;
 
   @override
   Widget build(BuildContext context) {
     return Column(
       children: [
-        _buildToolbar(),
+        DrawingToolbar(
+          onColorTap: () => ColorPickerDialog.showColorPicker(context),
+        ),
         Expanded(
           child: LayoutBuilder(
             builder: (context, constraints) {
@@ -290,7 +295,14 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
             },
           ),
         ),
-        _buildInlineControls(),
+        InlineControls(
+          controlsExpanded: _controlsExpanded,
+          onControlsToggle: (expanded) =>
+              setState(() => _controlsExpanded = expanded),
+          onImagePicker: () => ImagePickerWidget.showImagePicker(context),
+          onAdvancedSettings: () =>
+              AdvancedSettingsSheet.showAdvancedSettings(context),
+        ),
       ],
     );
   }
@@ -314,7 +326,6 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       setState(() {
         _backgroundImageData?.dispose(); // CRITICAL: Dispose old image
         _backgroundImageData = null;
-        _imageLoadError = null;
         _isLoadingImage = false;
       });
       return;
@@ -327,7 +338,6 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
 
     setState(() {
       _isLoadingImage = true;
-      _imageLoadError = null;
     });
 
     try {
@@ -380,7 +390,6 @@ class _DrawingCanvasState extends State<DrawingCanvas> {
       if (mounted) {
         setState(() {
           _isLoadingImage = false;
-          _imageLoadError = e.toString();
         });
 
         Get.snackbar(
